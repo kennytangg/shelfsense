@@ -4,7 +4,12 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build --prefix frontend",
-    "test": "node --test tests/dev.test.mjs"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
-  "engines": { "node": ">=24 <25" }
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2"
+  }
 }
