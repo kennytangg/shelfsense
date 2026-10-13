@@ -56,6 +56,8 @@ export function DashboardView() {
           .includes(search.toLowerCase())) &&
       (!status ||
         s.status === status ||
+        (status === "Placement review" &&
+          s.current?.placement_result?.status === "Placement review") ||
         (status === "Unavailable" && !s.current)) &&
       (!aisle || s.location === aisle),
   );
@@ -64,6 +66,12 @@ export function DashboardView() {
     { label: "Full", key: "full", filter: "Full", icon: CheckCircle2 },
     { label: "Low", key: "low", filter: "Low", icon: AlertTriangle },
     { label: "Empty", key: "empty", filter: "Empty", icon: PackageOpen },
+    {
+      label: "Placement review",
+      key: "placement_review",
+      filter: "Placement review",
+      icon: AlertTriangle,
+    },
     {
       label: "No valid reading",
       key: "unavailable",
@@ -164,7 +172,9 @@ export function DashboardView() {
                 <small>
                   {s.awaiting_verification
                     ? "Awaiting verification"
-                    : `${s.active_alert?.state || "Restock"} · ${percent(s.current?.occupancy_ratio)} occupied`}
+                    : s.current?.placement_result?.status === "Placement review"
+                      ? "Inspect product placement"
+                      : `${s.active_alert?.state || "Restock"} · ${percent(s.current?.occupancy_ratio)} occupied`}
                 </small>
                 <ArrowRight size={16} />
               </div>
@@ -207,6 +217,7 @@ export function DashboardView() {
               "Full",
               "Low",
               "Empty",
+              "Placement review",
               "Unavailable",
               "Needs setup",
               "Not checked",
@@ -286,6 +297,12 @@ export function DashboardView() {
                         (s.current ? "No active task" : "Setup needed")}
                   </strong>
                 </div>
+                {s.current?.placement_result?.status === "Placement review" && (
+                  <p className="card-warning">
+                    Possible misplaced items. Inspect the expected layout and
+                    orange overlay.
+                  </p>
+                )}
                 {s.last_error && (
                   <p className="card-warning">
                     Latest attempt needs review.{" "}

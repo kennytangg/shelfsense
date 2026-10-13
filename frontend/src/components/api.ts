@@ -14,6 +14,18 @@ export type Settings = {
   empty_threshold: number;
   full_threshold: number;
 };
+export type PlacementSettings = {
+  appearance_distance: number;
+  mismatch_threshold: number;
+  min_shared_ratio: number;
+};
+export type PlacementResult = {
+  status: string;
+  mismatch_ratio: number | null;
+  compared_ratio: number;
+  reason: string;
+  algorithm_version: string;
+};
 export type Analysis = {
   id: string;
   shelf_id: string;
@@ -23,13 +35,19 @@ export type Analysis = {
   warnings: string[];
   algorithm_version: string;
   calibration_version: number;
-  snapshot: { roi: ROI; settings: Settings };
+  snapshot: {
+    roi: ROI;
+    settings: Settings;
+    placement_settings: PlacementSettings | null;
+  };
   duration_ms: number;
   created_at: string;
   input: Asset;
   reference: Asset | null;
   overlay: Asset | null;
   mask: Asset | null;
+  placement_reference: Asset | null;
+  placement_result: PlacementResult | null;
 };
 export type Alert = {
   id: string;
@@ -55,6 +73,8 @@ export type Shelf = {
   roi: ROI | null;
   settings: Settings;
   reference: Asset | null;
+  placement_reference: Asset | null;
+  placement_settings: PlacementSettings;
   status: string;
   current: Analysis | null;
   latest_attempt: Analysis | null;
@@ -70,6 +90,7 @@ export type Dashboard = {
   low: number;
   empty: number;
   unavailable: number;
+  placement_review: number;
   attention: Shelf[];
 };
 export type Store = { name: string; location: string };

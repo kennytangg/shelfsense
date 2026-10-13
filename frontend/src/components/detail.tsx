@@ -16,11 +16,13 @@ import { Alert, Analysis, api, date, json, percent, Shelf } from "./api";
 import { Modal, Notice, Status } from "./ui";
 import { UploadModal } from "./upload";
 import { CalibrationForm } from "./calibration";
+import { PlacementForm } from "./placement";
 
 export function ShelfDetail({ id }: { id: string }) {
   const client = useQueryClient();
   const [upload, setUpload] = useState(false);
   const [setup, setSetup] = useState(false);
+  const [placementSetup, setPlacementSetup] = useState(false);
   const [overlay, setOverlay] = useState(false);
   const [sample, setSample] = useState("low");
   const [selected, setSelected] = useState<Analysis | null>(null);
@@ -104,6 +106,58 @@ export function ShelfDetail({ id }: { id: string }) {
           </button>
         </div>
       </div>
+      <section className="panel placement-panel">
+        <div className="section-heading">
+          <h2>Product placement</h2>
+          <button
+            className="button secondary small"
+            disabled={!shelf.reference}
+            onClick={() => setPlacementSetup(true)}
+          >
+            {shelf.placement_reference
+              ? "Expected layout"
+              : "Enable placement review"}
+          </button>
+        </div>
+        {reading?.placement_result ? (
+          <>
+            <Status status={reading.placement_result.status} />
+            <p>{reading.placement_result.reason}</p>
+            <p className="muted">
+              Appearance mismatch:{" "}
+              {percent(reading.placement_result.mismatch_ratio)} · Compared
+              area: {percent(reading.placement_result.compared_ratio)} of the
+              selected region.
+            </p>
+            {reading.placement_result.status === "Placement review" && (
+              <p>
+                Turn on Detection overlay to inspect the orange differences.
+              </p>
+            )}
+            {reading.placement_reference && (
+              <details>
+                <summary>Expected layout for this check</summary>
+                <img
+                  className="upload-preview"
+                  src={reading.placement_reference.url}
+                  alt="Expected shelf layout for this analysis"
+                />
+              </details>
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            {shelf.placement_reference
+              ? "Upload a new photo to check product appearance against the saved layout."
+              : "Save a correctly arranged shelf photo to flag possible misplaced items in a fixed layout."}
+          </p>
+        )}
+        <p className="small-text muted">
+          Lighting, packaging changes, and camera movement can also cause
+          differences. Placement review is separate from stock status and
+          restocking tasks.
+        </p>
+      </section>
       {!shelf.reference && (
         <Notice>
           This zone needs setup. Upload an empty reference and select its
@@ -301,6 +355,7 @@ export function ShelfDetail({ id }: { id: string }) {
                 <option value="low">Low coverage sample</option>
                 <option value="empty">Empty shelf sample</option>
                 <option value="mismatched">Mismatched framing sample</option>
+                <option value="misplaced">Misplaced packaging sample</option>
               </select>
             </label>
             <button
@@ -320,6 +375,11 @@ export function ShelfDetail({ id }: { id: string }) {
                 {demo.data.classification
                   ? `${demo.data.classification} · ${percent(demo.data.occupancy_ratio)} estimated occupied area. Saved.`
                   : `${demo.data.outcome}: ${demo.data.warnings.join(" ")}`}
+                {demo.data.placement_result &&
+                  ` ${demo.data.placement_result.status}.`}
+                {sample === "misplaced" &&
+                  !demo.data.placement_result &&
+                  " Enable placement review with the correct demo layout to compare packaging."}
               </Notice>
             )}
           </section>
@@ -342,6 +402,7 @@ export function ShelfDetail({ id }: { id: string }) {
                 <th>Result</th>
                 <th>Occupied area</th>
                 <th>Calibration</th>
+                <th>Placement</th>
                 <th>Inspect</th>
               </tr>
             </thead>
@@ -354,6 +415,7 @@ export function ShelfDetail({ id }: { id: string }) {
                   </td>
                   <td>{percent(a.occupancy_ratio)}</td>
                   <td>v{a.calibration_version}</td>
+                  <td>{a.placement_result?.status || "Not configured"}</td>
                   <td>
                     <button
                       className="text-button"
@@ -452,6 +514,14 @@ export function ShelfDetail({ id }: { id: string }) {
       {setup && (
         <Modal title="Calibrate shelf zone" close={() => setSetup(false)}>
           <CalibrationForm shelf={shelf} done={() => setSetup(false)} />
+        </Modal>
+      )}
+      {placementSetup && (
+        <Modal
+          title="Set expected shelf layout"
+          close={() => setPlacementSetup(false)}
+        >
+          <PlacementForm shelf={shelf} close={() => setPlacementSetup(false)} />
         </Modal>
       )}
     </>

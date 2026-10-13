@@ -10,9 +10,9 @@ import {
 import { useEffect, useRef } from "react";
 export function Status({ status }: { status: string }) {
   const Icon =
-    status === "Full"
+    status === "Full" || status === "Matches reference"
       ? CheckCircle2
-      : status === "Low"
+      : status === "Low" || status === "Placement review"
         ? AlertCircle
         : status === "Empty"
           ? PackageOpen

@@ -248,7 +248,7 @@ main {
 }
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 13px;
   margin-bottom: 27px;
 }
@@ -296,6 +296,13 @@ main {
 }
 .metric-unavailable svg {
   color: #84918b;
+}
+.metric-placement_review svg,
+.metric-placement_review strong {
+  color: #a95f18;
+}
+.placement-panel {
+  margin-bottom: 20px;
 }
 .section-heading {
   display: flex;
@@ -388,6 +395,10 @@ main {
 .status-low {
   color: #986814;
   background: #fcf2d8;
+}
+.status-placement-review {
+  color: #a95f18;
+  background: #fff0df;
 }
 .status-empty {
   color: #b94848;
