@@ -23,6 +23,12 @@ PostgreSQL stores timezone-aware timestamps; Python writes UTC and the browser d
 
 ## Alert state machine
 
+Placement review is a separate current-analysis finding. It adds dashboard attention
+even when stock is Full, but does not acknowledge, open, or resolve a restocking
+task. Stock classification still owns that workflow. Review/setup failures preserve
+the previous valid stock and placement findings. A correctly arranged expected
+reference is required before appearance comparison is enabled.
+
 - Valid Low/Empty creates an Open task if no active task exists; otherwise updates severity, latest triggering analysis and last detection time on that same task.
 - Acknowledge changes only workflow state, retaining urgency and measured status.
 - Report restocked resolves the task with `Staff reported restocked`, records the timestamp, and marks the shelf Awaiting verification. The measurement stays unchanged.
@@ -44,12 +50,40 @@ All routes live in FastAPI. Responses use Pydantic schemas, return managed `/med
 | POST `/api/shelves` | JSON: identifier, name, location, optional category; returns created shelf |
 | GET `/api/shelves/{id}` | Calibration, current/last analysis, last attempt diagnostic, active task, awaiting-verification state |
 | POST `/api/shelves/{id}/calibration` | Multipart `file` and JSON-string `config` containing `roi` and `settings`; returns shelf |
+| POST `/api/shelves/{id}/placement` | Multipart full-shelf `file`, JSON-string `config` and integer `calibration_version`; saves expected layout and settings |
+| DELETE `/api/shelves/{id}/placement` | Disables placement comparison, preserving historical references |
+| POST `/api/shelves/{id}/demo-placement` | JSON `calibration_version`; explicitly enables the bundled expected layout on a demo shelf |
 | POST `/api/shelves/{id}/analyses` | Multipart `file`; returns saved analysis, including nullable result for setup/review |
 | GET `/api/shelves/{id}/analyses?limit=50` | Newest-first history; limit 1–200 |
 | GET `/api/images/{id}` | Image metadata and relative URL |
 | GET `/api/alerts?state=Open` | Active/historical alerts, newest detection first; optional exact state filter |
 | PATCH `/api/alerts/{id}` | JSON `{"action":"acknowledge"}` or `{"action":"report_restocked"}` |
-| POST `/api/shelves/{id}/demo-analysis` | JSON `{"sample":"full"}`; allowlist: full, low, empty, mismatched; only demo shelves |
+| POST `/api/shelves/{id}/demo-analysis` | JSON `{"sample":"full"}`; allowlist: full, low, empty, mismatched, misplaced; only demo shelves |
+
+Shelf responses include `placement_reference` and validated `placement_settings`.
+Analysis responses include the immutable `placement_reference`, nullable
+`placement_result` (status, mismatch ratio, compared area, reason, algorithm version),
+and settings in the snapshot. Historical analyses before feature setup return null.
+Dashboard `placement_review` counts current placement findings independently of
+stock totals; `attention` includes Full shelves with placement findings. Shelf
+filter `status=Placement review` selects those findings.
+
+Migration `0002` adds the expected-reference columns and same-shelf ownership
+constraints, analysis evidence, and `ingestion_receipts`. Receipt primary keys are
+`(shelf_id, calibration_version, digest)`. The receipt and analysis commit together
+under the shelf lock; duplicate concurrent publications clean up their newly written
+files and return the existing analysis. A receipt never points to another shelf's
+analysis. Seed/reset behavior remains ownership aware and deletes receipts only
+when explicitly resetting a demo-owned shelf.
+
+The explicit `shelfsense watch` worker ingests stable images from shelf-identifier
+subfolders through the same service. There is no watcher in the API process and no
+new asynchronous task or dependency. It rechecks calibration before publication,
+retains source images, logs failure diagnostics, and resumes after service failures.
+Successful receipts survive worker restart. Invalid bytes are logged once for an
+unchanged file in a worker session; modification or restart permits retry. The
+source filesystem and database are separate: receipts give publication deduplication,
+not a guarantee that a producer has finished writing. Atomic rename is recommended.
 
 Calibration example:
 

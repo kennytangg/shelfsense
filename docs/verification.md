@@ -1,5 +1,46 @@
 # Verification record
 
+## Optional features — 2026-10-13
+
+Implemented expected-layout placement review and explicit local folder monitoring.
+Migration `0002` was applied to the existing local Docker PostgreSQL application
+database; no application shelves, readings, alerts or media were reset.
+`DATABASE_URL` and the separate `TEST_DATABASE_URL` are stored in ignored
+`backend/.env`; credentials are not recorded here.
+
+- **26 backend tests passed** against real PostgreSQL, including shared-foreground
+  placement comparisons across all 12 synthetic zones, missing-product separation,
+  insufficient evidence, expected-reference ownership/history, stale placement
+  setup and cleanup, concurrent receipt deduplication, failed transaction rollback,
+  file stability, invalid-byte preservation, worker restart, and recalibration.
+- Frontend production Webpack build, TypeScript, formatting, backend Ruff checks,
+  and whitespace checks passed. Launcher tests: **2 passed**.
+- `scripts/feature_smoke.py` passed using a disposable schema in `shelfsense_test`
+  and temporary media. It builds into `.next-feature-smoke` on available ports,
+  exercises the production API/media proxy, expected-layout setup, a Low shelf
+  matching remaining products, a Full shelf requiring placement review, refresh,
+  dashboard placement filtering, desktop and 390px mobile rendering, genuine
+  expected-layout file upload and disabling, an actual
+  folder worker process, and restart without a duplicate analysis. Servers stop
+  and the disposable schema is removed on completion. Application data is separate.
+- Placement screenshots: [desktop](placement-desktop.png),
+  [dashboard](placement-dashboard.png), [mobile](placement-mobile.png).
+
+The existing Starlette deprecation and intentional Pillow decoded-pixel warning
+remain non-failing. Next.js also reports its existing multiple-lockfile workspace
+root warning. No cloud publication was performed.
+
+Placement is a fixed-layout appearance heuristic, not product identification.
+Synthetic verification does not establish real-store accuracy. Orange marks
+appearance differences; lighting and camera movement can also cause them. Folder
+monitoring needs another process to produce captures, retains source files, and
+uses per-shelf/per-calibration byte digests for duplicate protection. Use atomic
+rename to publish captures and archive old files before recalibration when only new
+images should be checked. Staff feedback remains in the dashboard; browser, email
+and SMS notifications were not selected for this implementation.
+
+## Original verification — 2026-10-07
+
 Verified locally on **2026-10-07**. The application was built and exercised against real PostgreSQL, including production Next.js rewrites. No frontend classifier mocks or SQLite substitute were used.
 
 ## Tested versions
