@@ -6,7 +6,7 @@ from sqlalchemy import delete, select, text
 from . import db, service
 from .detector import decode
 from .fixtures import ROOT, generate
-from .models import Alert, Analysis, ImageAsset, Shelf, Store, now
+from .models import Alert, Analysis, ImageAsset, IngestionReceipt, Shelf, Store, now
 from .schemas import Calibration
 
 
@@ -81,7 +81,9 @@ def reset():
             )
             paths.extend(db.MEDIA_ROOT / asset.storage_key for asset in assets)
             shelf.reference_image_id = shelf.latest_valid_analysis_id = None
+            shelf.placement_reference_image_id = None
             session.flush()
+            session.execute(delete(IngestionReceipt).where(IngestionReceipt.shelf_id == shelf.id))
             session.execute(delete(Alert).where(Alert.shelf_id == shelf.id))
             session.execute(delete(Analysis).where(Analysis.shelf_id == shelf.id))
             session.execute(delete(ImageAsset).where(ImageAsset.shelf_id == shelf.id))
@@ -92,13 +94,21 @@ def reset():
 
 def main():
     parser = argparse.ArgumentParser(description="ShelfSense local demo utilities")
-    parser.add_argument("command", choices=["fixtures", "seed", "reset-demo"])
+    parser.add_argument("command", choices=["fixtures", "seed", "reset-demo", "watch"])
     parser.add_argument("--yes", action="store_true", help="Confirm removal of demo-only records")
+    parser.add_argument("--folder", help="Monitoring root containing shelf-identifier subfolders")
+    parser.add_argument("--interval", type=float, default=2, help="Scan interval in seconds (>= 1)")
     args = parser.parse_args()
     if args.command == "fixtures":
         generate()
     elif args.command == "seed":
         seed()
+    elif args.command == "watch":
+        if not args.folder or not args.interval >= 1 or args.interval > 3600:
+            parser.error("watch requires --folder and an interval between 1 and 3600 seconds")
+        from .monitor import watch
+
+        watch(args.folder, args.interval)
     elif args.yes:
         reset()
     else:

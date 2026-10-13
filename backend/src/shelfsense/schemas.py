@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .detector import DetectorConfig, ROI
+from .placement import PlacementConfig, PlacementResult
 
 
 class ShelfCreate(BaseModel):
@@ -49,6 +50,8 @@ class AnalysisOut(BaseModel):
     reference: AssetOut | None
     overlay: AssetOut | None
     mask: AssetOut | None
+    placement_reference: AssetOut | None
+    placement_result: PlacementResult | None
 
 
 class AlertOut(BaseModel):
@@ -80,6 +83,8 @@ class ShelfOut(BaseModel):
     roi: ROI | None
     settings: DetectorConfig
     reference: AssetOut | None
+    placement_reference: AssetOut | None
+    placement_settings: PlacementConfig
     status: str
     current: AnalysisOut | None
     latest_attempt: AnalysisOut | None
@@ -104,6 +109,7 @@ class DashboardOut(BaseModel):
     low: int
     empty: int
     unavailable: int
+    placement_review: int
     attention: list[ShelfOut]
 
 
@@ -112,7 +118,11 @@ class Action(BaseModel):
 
 
 class DemoSample(BaseModel):
-    sample: Literal["full", "low", "empty", "mismatched"]
+    sample: Literal["full", "low", "empty", "mismatched", "misplaced"]
+
+
+class DemoPlacement(BaseModel):
+    calibration_version: int = Field(ge=0)
 
 
 class HealthOut(BaseModel):

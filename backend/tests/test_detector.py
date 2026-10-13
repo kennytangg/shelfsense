@@ -77,3 +77,50 @@ def test_exif_orientation():
     exif[274] = 6
     image.save(stream, format="JPEG", exif=exif)
     assert decode(stream.getvalue()).shape == (100, 70, 3)
+
+
+def test_placement_excludes_missing_products_and_flags_changed_packaging():
+    from shelfsense.placement import PlacementConfig, compare_placement
+
+    manifest = generate()
+    for entry in manifest["shelves"]:
+        empty = decode((ROOT / entry["reference"]).read_bytes())
+        expected = decode((ROOT / entry["samples"]["full"]["file"]).read_bytes())
+        roi, settings = ROI(**entry["roi"]), DetectorConfig()
+        for name, status in [
+            ("full", "Matches reference"),
+            ("low", "Matches reference"),
+            ("empty", "Not enough evidence"),
+            ("misplaced", "Placement review"),
+            ("mismatched", "Not enough evidence"),
+        ]:
+            current = decode((ROOT / entry["samples"][name]["file"]).read_bytes())
+            stock = detect(empty, current, roi, settings)
+            original = stock.overlay.copy() if stock.overlay is not None else None
+            result = compare_placement(
+                empty, expected, current, roi, settings, PlacementConfig(), stock
+            )
+            assert result.status == status
+            if name == "misplaced":
+                assert stock.classification == "Full"
+                assert result.mismatch_ratio > 0.25
+                assert np.any(stock.overlay != original)
+            if name == "low":
+                assert stock.classification == "Low" and result.mismatch_ratio == 0
+            if name == "empty":
+                assert result.mismatch_ratio is None
+
+
+def test_placement_requires_matching_framing_and_valid_settings():
+    from shelfsense.placement import PlacementConfig, compare_placement
+
+    generate()
+    empty = decode((ROOT / "zone-01/reference.png").read_bytes())
+    current = decode((ROOT / "zone-01/full.png").read_bytes())
+    stock = detect(empty, current, ROI(), DetectorConfig())
+    result = compare_placement(
+        empty, current[:100], current, ROI(), DetectorConfig(), PlacementConfig(), stock
+    )
+    assert result.status == "Not enough evidence"
+    with pytest.raises(ValueError):
+        PlacementConfig(mismatch_threshold=0)

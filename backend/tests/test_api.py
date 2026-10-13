@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from shelfsense import db, service
 from shelfsense.detector import decode
 from shelfsense.fixtures import ROOT, ROI_DATA, generate
-from shelfsense.models import Alert, Analysis, ImageAsset, Shelf, Store
+from shelfsense.models import Alert, Analysis, ImageAsset, IngestionReceipt, Shelf, Store
 from shelfsense.schemas import Calibration
 
 
@@ -289,3 +289,168 @@ def test_seed_idempotence_and_reset_preserves_user_uploads(client):
     with db.Session() as session:
         for asset in session.scalars(select(ImageAsset)):
             assert (db.MEDIA_ROOT / asset.storage_key).exists()
+
+
+def placement_setup(client, shelf_id, variant="full", version=None):
+    return client.post(
+        f"/api/shelves/{shelf_id}/placement",
+        files={"file": ("expected.png", (ROOT / f"zone-01/{variant}.png").read_bytes())},
+        data={
+            "config": "{}",
+            "calibration_version": version or detail(client, shelf_id)["calibration_version"],
+        },
+    )
+
+
+def test_placement_is_separate_from_stock_and_retains_historical_reference(client):
+    shelf_id = create(client)
+    calibration(client, shelf_id)
+    original = upload(client, shelf_id, "low")
+    alert_id = detail(client, shelf_id)["active_alert"]["id"]
+    assert placement_setup(client, shelf_id, "low").status_code == 422
+    assert detail(client, shelf_id)["current"]["id"] == original["id"]
+    setup = placement_setup(client, shelf_id)
+    assert setup.status_code == 200, setup.text
+    assert setup.json()["current"] is None
+    expected_id = setup.json()["placement_reference"]["id"]
+    assert detail(client, shelf_id)["active_alert"]["id"] == alert_id
+    low = upload(client, shelf_id, "low")
+    assert low["placement_result"]["status"] == "Matches reference"
+    assert detail(client, shelf_id)["active_alert"]["id"] == alert_id
+    wrong = upload(client, shelf_id, "misplaced")
+    assert wrong["classification"] == "Full"
+    assert wrong["placement_result"]["status"] == "Placement review"
+    assert wrong["placement_reference"]["id"] == expected_id
+    assert wrong["snapshot"]["placement_settings"]["mismatch_threshold"] == 0.18
+    assert detail(client, shelf_id)["active_alert"] is None
+    dashboard = client.get("/api/dashboard").json()
+    assert dashboard["full"] == 1 and dashboard["placement_review"] == 1
+    assert dashboard["attention"][0]["id"] == shelf_id
+    assert len(client.get("/api/shelves?status=Placement%20review").json()) == 1
+    review = upload(client, shelf_id, "mismatched")
+    assert review["placement_result"]["status"] == "Not enough evidence"
+    assert detail(client, shelf_id)["current"]["id"] == wrong["id"]
+    calibration(client, shelf_id)
+    assert detail(client, shelf_id)["placement_reference"] is None
+    history = client.get(f"/api/shelves/{shelf_id}/analyses").json()
+    old = next(a for a in history if a["id"] == wrong["id"])
+    assert old["placement_reference"]["id"] == expected_id
+    assert upload(client, shelf_id, "full")["placement_result"] is None
+
+
+def test_placement_ownership_disable_and_stale_configuration(client, monkeypatch):
+    shelf_id = create(client)
+    other_id = create(client, "TEST-02")
+    calibration(client, shelf_id)
+    before = set(db.MEDIA_ROOT.iterdir())
+    assert placement_setup(client, shelf_id, version=999).status_code == 409
+    assert set(db.MEDIA_ROOT.iterdir()) == before
+    assert placement_setup(client, shelf_id).status_code == 200
+    reference_id = detail(client, shelf_id)["placement_reference"]["id"]
+    with db.Session.begin() as session:
+        with pytest.raises(IntegrityError):
+            with session.begin_nested():
+                session.get(Shelf, other_id).placement_reference_image_id = reference_id
+                session.flush()
+    reading = upload(client, shelf_id, "misplaced")
+    calibration(client, other_id)
+    other_setup = placement_setup(client, other_id)
+    assert other_setup.status_code == 200
+    other_reference_id = other_setup.json()["placement_reference"]["id"]
+    with db.Session.begin() as session:
+        with pytest.raises(IntegrityError):
+            with session.begin_nested():
+                session.get(
+                    Analysis, reading["id"]
+                ).placement_reference_image_id = other_reference_id
+                session.flush()
+    before = set(db.MEDIA_ROOT.iterdir())
+    original = service.detect
+
+    def race(*args):
+        result = original(*args)
+        with db.Session.begin() as session:
+            session.get(Shelf, shelf_id).calibration_version += 1
+        return result
+
+    monkeypatch.setattr(service, "detect", race)
+    assert placement_setup(client, shelf_id).status_code == 409
+    assert set(db.MEDIA_ROOT.iterdir()) == before
+    assert detail(client, shelf_id)["placement_reference"]["id"] == reference_id
+    monkeypatch.setattr(service, "detect", original)
+    response = client.delete(f"/api/shelves/{shelf_id}/placement")
+    assert response.status_code == 200 and response.json()["placement_reference"] is None
+    history = client.get(f"/api/shelves/{shelf_id}/analyses").json()
+    assert history[0]["placement_reference"]["id"] == reference_id
+
+
+def test_monitored_analysis_deduplicates_concurrent_workers_and_rolls_back(client, monkeypatch):
+    import hashlib
+
+    shelf_id = create(client)
+    calibration(client, shelf_id)
+    data = (ROOT / "zone-01/low.png").read_bytes()
+    image, digest = decode(data), hashlib.sha256(data).hexdigest()
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        ids = list(
+            executor.map(
+                lambda _: service.analyze(shelf_id, image, ingestion_digest=digest), range(3)
+            )
+        )
+    assert len(set(ids)) == 1
+    assert len(list(db.MEDIA_ROOT.iterdir())) == 4  # Reference plus input, overlay, mask.
+    assert len(client.get(f"/api/shelves/{shelf_id}/analyses").json()) == 1
+    with db.Session() as session:
+        receipt = session.get(IngestionReceipt, (shelf_id, 1, digest))
+        assert receipt.analysis_id == ids[0]
+    calibration(client, shelf_id)
+    new_id = service.analyze(shelf_id, image, ingestion_digest=digest)
+    assert new_id != ids[0]
+    before = set(db.MEDIA_ROOT.iterdir())
+
+    def fail(*args):
+        raise RuntimeError("simulated commit failure")
+
+    monkeypatch.setattr(service, "update_alert", fail)
+    with pytest.raises(RuntimeError):
+        service.analyze(shelf_id, image, ingestion_digest="a" * 64)
+    assert set(db.MEDIA_ROOT.iterdir()) == before
+    with db.Session() as session:
+        assert session.get(IngestionReceipt, (shelf_id, 2, "a" * 64)) is None
+
+
+def test_folder_monitor_stability_restart_invalid_bytes_and_recalibration(client, tmp_path):
+    from shelfsense.monitor import FolderMonitor
+
+    shelf_id = create(client)
+    calibration(client, shelf_id)
+    # Use a sibling directory, never the managed media directory.
+    folder = tmp_path.parent / f"inbox-{uuid4().hex}"
+    zone = folder / "TEST-01"
+    zone.mkdir(parents=True)
+    source = zone / "capture.png"
+    source.write_bytes(b"partially written")
+    worker = FolderMonitor(folder)
+    assert worker.scan() == []
+    source.write_bytes((ROOT / "zone-01/low.png").read_bytes())
+    assert worker.scan() == []  # Changed since the previous scan.
+    assert len(worker.scan()) == 1
+    assert worker.scan() == [] and source.exists()
+    restarted = FolderMonitor(folder)
+    assert restarted.scan() == [] and restarted.scan() == []
+    calibration(client, shelf_id)
+    assert len(restarted.scan()) == 1
+    bad = zone / "broken.jpg"
+    bad.write_bytes(b"bad")
+    assert restarted.scan() == [] and restarted.scan() == []
+    assert detail(client, shelf_id)["last_error"]
+    valid_id = detail(client, shelf_id)["current"]["id"]
+    assert restarted.scan() == []
+    assert detail(client, shelf_id)["current"]["id"] == valid_id
+    bad.write_bytes((ROOT / "zone-01/full.png").read_bytes())
+    assert restarted.scan() == []
+    assert len(restarted.scan()) == 1
+    assert detail(client, shelf_id)["status"] == "Full"
+    assert bad.exists() and source.exists()
+    with pytest.raises(ValueError):
+        FolderMonitor(db.MEDIA_ROOT)

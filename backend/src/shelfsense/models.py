@@ -37,6 +37,8 @@ class Shelf(Base):
     location: Mapped[str] = mapped_column(String(120))
     category: Mapped[str | None] = mapped_column(String(120))
     reference_image_id: Mapped[str | None] = mapped_column(String(36))
+    placement_reference_image_id: Mapped[str | None] = mapped_column(String(36))
+    placement_settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     roi: Mapped[dict | None] = mapped_column(JSONB)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     calibration_version: Mapped[int] = mapped_column(Integer, default=0)
@@ -69,6 +71,8 @@ class Analysis(Base):
     shelf_id: Mapped[str] = mapped_column(ForeignKey("shelves.id"))
     input_image_id: Mapped[str] = mapped_column(String(36))
     reference_image_id: Mapped[str | None] = mapped_column(String(36))
+    placement_reference_image_id: Mapped[str | None] = mapped_column(String(36))
+    placement_result: Mapped[dict | None] = mapped_column(JSONB)
     overlay_image_id: Mapped[str | None] = mapped_column(String(36))
     mask_image_id: Mapped[str | None] = mapped_column(String(36))
     outcome: Mapped[str] = mapped_column(String(30))
@@ -94,3 +98,11 @@ class Alert(Base):
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolution_reason: Mapped[str | None] = mapped_column(String(100))
+
+
+class IngestionReceipt(Base):
+    __tablename__ = "ingestion_receipts"
+    shelf_id: Mapped[str] = mapped_column(ForeignKey("shelves.id"), primary_key=True)
+    calibration_version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    analysis_id: Mapped[str] = mapped_column(String(36))

@@ -1,6 +1,7 @@
 """Short, locked publication transactions after image processing has completed."""
 
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 from fastapi import HTTPException
@@ -18,7 +19,8 @@ from .detector import (
     decode,
     detect,
 )
-from .models import Alert, Analysis, ImageAsset, Shelf, Store, now, uid
+from .models import Alert, Analysis, ImageAsset, IngestionReceipt, Shelf, Store, now, uid
+from .placement import PlacementConfig, compare_placement
 from .schemas import AlertOut, AnalysisOut, AssetOut, Calibration, ShelfOut
 
 
@@ -57,6 +59,7 @@ def analysis_out(session, analysis):
         reference=asset_out(session, analysis.reference_image_id),
         overlay=asset_out(session, analysis.overlay_image_id),
         mask=asset_out(session, analysis.mask_image_id),
+        placement_reference=asset_out(session, analysis.placement_reference_image_id),
     )
 
 
@@ -113,6 +116,8 @@ def shelf_out(session, shelf):
         roi=shelf.roi,
         settings=DetectorConfig(**shelf.settings),
         reference=asset_out(session, shelf.reference_image_id),
+        placement_reference=asset_out(session, shelf.placement_reference_image_id),
+        placement_settings=PlacementConfig(**shelf.placement_settings),
         status=status,
         current=analysis_out(session, current),
         latest_attempt=analysis_out(session, latest),
@@ -179,6 +184,7 @@ def calibrate(shelf_id, image, calibration: Calibration, demo=False):
             session.add(asset)
             session.flush()
             shelf.reference_image_id = asset.id
+            shelf.placement_reference_image_id = None
             shelf.roi = roi.model_dump()
             shelf.settings = calibration.settings.model_dump()
             shelf.calibration_version += 1
@@ -189,6 +195,50 @@ def calibrate(shelf_id, image, calibration: Calibration, demo=False):
     except Exception:
         cleanup(paths)
         raise
+
+
+def configure_placement(shelf_id, image, settings: PlacementConfig, version: int, demo=False):
+    with db.Session() as session:
+        shelf = get_shelf(session, shelf_id)
+        if not shelf.reference_image_id or shelf.calibration_version != version:
+            raise HTTPException(409, "Save stock calibration first, then reload placement setup.")
+        roi, stock_settings = ROI(**shelf.roi), DetectorConfig(**shelf.settings)
+        key = session.get(ImageAsset, shelf.reference_image_id).storage_key
+    with Image.open(db.MEDIA_ROOT / key) as ref:
+        empty = np.array(ref.convert("RGB"))
+    result = detect(empty, image, roi, stock_settings)
+    if result.outcome != "Valid" or result.classification != "Full":
+        raise HTTPException(422, "Use a correctly arranged Full shelf photo with matching framing.")
+    paths = []
+    try:
+        asset = write_asset(shelf_id, image, "PlacementReference", demo, paths)
+        with db.Session.begin() as session:
+            shelf = get_shelf(session, shelf_id, lock=True)
+            if shelf.calibration_version != version:
+                raise HTTPException(409, "Calibration changed; reload placement setup.")
+            session.add(asset)
+            session.flush()
+            shelf.placement_reference_image_id = asset.id
+            shelf.placement_settings = settings.model_dump()
+            shelf.calibration_version += 1
+            shelf.latest_valid_analysis_id = None
+            shelf.last_error = None
+            shelf.last_attempt_at = None
+        return asset.id
+    except Exception:
+        cleanup(paths)
+        raise
+
+
+def disable_placement(shelf_id):
+    with db.Session.begin() as session:
+        shelf = get_shelf(session, shelf_id, lock=True)
+        if shelf.placement_reference_image_id:
+            shelf.placement_reference_image_id = None
+            shelf.calibration_version += 1
+            shelf.latest_valid_analysis_id = None
+            shelf.last_error = None
+            shelf.last_attempt_at = None
 
 
 def update_alert(session, shelf, analysis):
@@ -213,18 +263,46 @@ def update_alert(session, shelf, analysis):
         shelf.reported_restocked_at = None
 
 
-def analyze(shelf_id, image, demo=False, timestamp=None):
+def analyze(
+    shelf_id, image, demo=False, timestamp=None, ingestion_digest=None, expected_version=None
+):
     # Snapshot and close read transaction before CPU / filesystem work.
     with db.Session() as session:
         shelf = get_shelf(session, shelf_id)
         version, roi_data, settings = shelf.calibration_version, shelf.roi, shelf.settings
+        if expected_version is not None and version != expected_version:
+            raise HTTPException(409, "Calibration changed; retry the monitored image.")
+        if ingestion_digest:
+            receipt = session.get(IngestionReceipt, (shelf_id, version, ingestion_digest))
+            if receipt:
+                return receipt.analysis_id
         reference_id = shelf.reference_image_id
         reference_key = session.get(ImageAsset, reference_id).storage_key if reference_id else None
+        placement_id, placement_settings = (
+            shelf.placement_reference_image_id,
+            shelf.placement_settings,
+        )
+        placement_key = session.get(ImageAsset, placement_id).storage_key if placement_id else None
+    placement_result = None
     if reference_key:
         # Managed references are normalized PNGs, already validated on ingestion.
         with Image.open(db.MEDIA_ROOT / reference_key) as ref:
             reference = np.array(ref.convert("RGB"))
         result = detect(reference, image, ROI(**roi_data), DetectorConfig(**settings))
+        if placement_key:
+            with Image.open(db.MEDIA_ROOT / placement_key) as ref:
+                expected = np.array(ref.convert("RGB"))
+            placement_start = perf_counter()
+            placement_result = compare_placement(
+                reference,
+                expected,
+                image,
+                ROI(**roi_data),
+                DetectorConfig(**settings),
+                PlacementConfig(**placement_settings),
+                result,
+            ).model_dump()
+            result.duration_ms += (perf_counter() - placement_start) * 1000
     else:
         result = Detection(
             "Needs setup", None, None, ["Upload an empty reference and select an ROI first."], 0
@@ -248,6 +326,11 @@ def analyze(shelf_id, image, demo=False, timestamp=None):
                 raise HTTPException(
                     409, "Calibration changed during processing. Submit a new image."
                 )
+            if ingestion_digest:
+                receipt = session.get(IngestionReceipt, (shelf_id, version, ingestion_digest))
+                if receipt:
+                    cleanup(paths)
+                    return receipt.analysis_id
             session.add_all([a for a in [input_asset, overlay, mask] if a is not None])
             session.flush()
             analysis = Analysis(
@@ -255,6 +338,8 @@ def analyze(shelf_id, image, demo=False, timestamp=None):
                 shelf_id=shelf.id,
                 input_image_id=input_asset.id,
                 reference_image_id=reference_id,
+                placement_reference_image_id=placement_id,
+                placement_result=placement_result,
                 overlay_image_id=overlay.id if overlay else None,
                 mask_image_id=mask.id if mask else None,
                 outcome=result.outcome,
@@ -263,12 +348,25 @@ def analyze(shelf_id, image, demo=False, timestamp=None):
                 warnings=result.warnings,
                 algorithm_version=ALGORITHM_VERSION,
                 calibration_version=version,
-                snapshot={"roi": roi_data, "settings": settings},
+                snapshot={
+                    "roi": roi_data,
+                    "settings": settings,
+                    "placement_settings": placement_settings if placement_id else None,
+                },
                 duration_ms=result.duration_ms,
                 created_at=timestamp or now(),
             )
             session.add(analysis)
             session.flush()
+            if ingestion_digest:
+                session.add(
+                    IngestionReceipt(
+                        shelf_id=shelf_id,
+                        calibration_version=version,
+                        digest=ingestion_digest,
+                        analysis_id=analysis.id,
+                    )
+                )
             shelf.last_attempt_at = analysis.created_at
             shelf.last_error = "; ".join(result.warnings) or None
             if result.outcome == "Valid":

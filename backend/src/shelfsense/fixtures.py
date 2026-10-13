@@ -61,6 +61,19 @@ def generate():
                 "file": f"zone-{index + 1:02d}/{variant}.png",
                 "expected": variant.title(),
             }
+        # Same coverage and positions, but visibly different packaging in nine slots.
+        misplaced = image.copy()
+        draw = ImageDraw.Draw(misplaced)
+        for col in range(9):
+            x, y = 36 + col * 63, 55
+            draw.rectangle((x + 3, y + 8, x + 55, y + 130), fill="#a020ce")
+            draw.text((x + 8, y + 55), "OTHER", fill="#ffffff")
+        misplaced.save(folder / "misplaced.png")
+        variants["misplaced"] = {
+            "file": f"zone-{index + 1:02d}/misplaced.png",
+            "expected": "Full",
+            "expected_placement": "Placement review",
+        }
         Image.new("RGB", (400, 640), "#222222").save(folder / "mismatched.png")
         variants["mismatched"] = {
             "file": f"zone-{index + 1:02d}/mismatched.png",

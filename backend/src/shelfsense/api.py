@@ -12,6 +12,7 @@ from . import db, service
 from .detector import ImageError, decode
 from .fixtures import ROOT
 from .models import Alert, Analysis, ImageAsset, Shelf
+from .placement import PlacementConfig
 from .schemas import (
     Action,
     AlertOut,
@@ -20,6 +21,7 @@ from .schemas import (
     Calibration,
     DashboardOut,
     DemoSample,
+    DemoPlacement,
     HealthOut,
     ShelfCreate,
     ShelfOut,
@@ -76,7 +78,16 @@ def shelves(search: str = "", status: str = "", aisle: str = ""):
             s
             for s in records
             if (not search or search.lower() in f"{s.identifier} {s.name}".lower())
-            and (not status or s.status == status or status == "Unavailable" and s.current is None)
+            and (
+                not status
+                or s.status == status
+                or status == "Unavailable"
+                and s.current is None
+                or status == "Placement review"
+                and s.current is not None
+                and s.current.placement_result is not None
+                and s.current.placement_result.status == "Placement review"
+            )
             and (not aisle or s.location == aisle)
         ]
         order = {
@@ -93,13 +104,22 @@ def shelves(search: str = "", status: str = "", aisle: str = ""):
 @app.get("/api/dashboard", response_model=DashboardOut)
 def dashboard():
     records = shelves()
+
+    def placement_review(s):
+        return (
+            s.current is not None
+            and s.current.placement_result is not None
+            and s.current.placement_result.status == "Placement review"
+        )
+
     return DashboardOut(
         total=len(records),
         full=sum(s.status == "Full" for s in records),
         low=sum(s.status == "Low" for s in records),
         empty=sum(s.status == "Empty" for s in records),
         unavailable=sum(s.current is None for s in records),
-        attention=[s for s in records if s.status in {"Low", "Empty"}],
+        placement_review=sum(placement_review(s) for s in records),
+        attention=[s for s in records if s.status in {"Low", "Empty"} or placement_review(s)],
     )
 
 
@@ -128,6 +148,29 @@ def calibration(shelf_id: str, file: Annotated[UploadFile, File()], config: Anno
         ) from exc
     image = service.decode_upload(shelf_id, file)
     service.calibrate(shelf_id, image, payload)
+    return shelf_detail(shelf_id)
+
+
+@app.post("/api/shelves/{shelf_id}/placement", response_model=ShelfOut)
+def placement_setup(
+    shelf_id: str,
+    file: Annotated[UploadFile, File()],
+    config: Annotated[str, Form()],
+    calibration_version: Annotated[int, Form()],
+):
+    try:
+        settings = PlacementConfig.model_validate_json(config)
+    except ValidationError as exc:
+        raise HTTPException(422, "Invalid placement settings.") from exc
+    service.configure_placement(
+        shelf_id, service.decode_upload(shelf_id, file), settings, calibration_version
+    )
+    return shelf_detail(shelf_id)
+
+
+@app.delete("/api/shelves/{shelf_id}/placement", response_model=ShelfOut)
+def placement_disable(shelf_id: str):
+    service.disable_placement(shelf_id)
     return shelf_detail(shelf_id)
 
 
@@ -203,3 +246,24 @@ def demo_analysis(shelf_id: str, payload: DemoSample):
     analysis_id = service.analyze(shelf_id, image, demo=True)
     with db.Session() as session:
         return service.analysis_out(session, session.get(Analysis, analysis_id))
+
+
+@app.post("/api/shelves/{shelf_id}/demo-placement", response_model=ShelfOut)
+def demo_placement(shelf_id: str, payload: DemoPlacement):
+    with db.Session() as session:
+        shelf = service.get_shelf(session, shelf_id)
+        if not shelf.demo:
+            raise HTTPException(400, "Demo layout is available only for synthetic demo shelves.")
+        identifier = shelf.identifier
+    path = ROOT / "manifest.json"
+    if not path.exists():
+        raise HTTPException(503, "Run the fixture generation command first.")
+    manifest = json.loads(path.read_text())
+    entry = next((s for s in manifest["shelves"] if s["identifier"] == identifier), None)
+    if not entry:
+        raise HTTPException(404, "No bundled layout for this shelf.")
+    image = decode((ROOT / entry["samples"]["full"]["file"]).read_bytes())
+    service.configure_placement(
+        shelf_id, image, PlacementConfig(), payload.calibration_version, demo=True
+    )
+    return shelf_detail(shelf_id)

@@ -25,6 +25,11 @@
           "file": "zone-01/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-01/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-01/mismatched.png",
           "expected": "Review required"
@@ -54,6 +59,11 @@
         "full": {
           "file": "zone-02/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-02/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-02/mismatched.png",
@@ -85,6 +95,11 @@
           "file": "zone-03/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-03/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-03/mismatched.png",
           "expected": "Review required"
@@ -114,6 +129,11 @@
         "full": {
           "file": "zone-04/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-04/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-04/mismatched.png",
@@ -145,6 +165,11 @@
           "file": "zone-05/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-05/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-05/mismatched.png",
           "expected": "Review required"
@@ -174,6 +199,11 @@
         "full": {
           "file": "zone-06/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-06/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-06/mismatched.png",
@@ -205,6 +235,11 @@
           "file": "zone-07/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-07/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-07/mismatched.png",
           "expected": "Review required"
@@ -234,6 +269,11 @@
         "full": {
           "file": "zone-08/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-08/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-08/mismatched.png",
@@ -265,6 +305,11 @@
           "file": "zone-09/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-09/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-09/mismatched.png",
           "expected": "Review required"
@@ -294,6 +339,11 @@
         "full": {
           "file": "zone-10/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-10/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-10/mismatched.png",
@@ -325,6 +375,11 @@
           "file": "zone-11/full.png",
           "expected": "Full"
         },
+        "misplaced": {
+          "file": "zone-11/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
         "mismatched": {
           "file": "zone-11/mismatched.png",
           "expected": "Review required"
@@ -354,6 +409,11 @@
         "full": {
           "file": "zone-12/full.png",
           "expected": "Full"
+        },
+        "misplaced": {
+          "file": "zone-12/misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
         },
         "mismatched": {
           "file": "zone-12/mismatched.png",
