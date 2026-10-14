@@ -1,6 +1,6 @@
 # How the detector works
 
-`backend/src/shelfsense/detector.py` exposes `detect(reference, current, roi, config)`. Inputs are decoded RGB NumPy arrays. It has no database, fixture-name, expected-label, network, or UI dependencies. `decode(bytes)` validates formats and resource limits and applies Pillow's EXIF transpose consistently before ROI coordinates are interpreted.
+`src/server/detector.ts` exposes `detect(reference, current, roi, config)`. Inputs are decoded RGB buffers. It has no database, fixture-name, expected-label, network, or UI dependencies. `decode(bytes)` validates formats and resource limits and applies Sharp's EXIF orientation consistently before ROI coordinates are interpreted.
 
 1. **Framing guard:** reject aspect ratios differing by more than 2.5%. Corresponding resolutions can differ. Compatible ratios do not prove the camera position matches; there is no perspective reconstruction or registration.
 2. **ROI:** crop the same normalized rectangle in each image; reject either ROI side below 32 source pixels. Resize crops to a common width (640 by default) preserving reference-ROI proportions. Reject processing heights above 4096.
@@ -16,13 +16,13 @@ Thresholds, processing width, morphology size and minimum component size live in
 
 ## Synthetic fixtures
 
-`fixtures.py` deterministically generates 12 pairs of textured shelf scenes with colored boxes and rounded containers, plus Empty/Low/Full and mismatched variants. `assets/demo/manifest.json` associates zones with references, normalized ROIs and expected evaluation labels. The expected labels are used only in tests. The production detector never reads the manifest; the demo route uses it only to select an allowlisted input file and then calls the ordinary analysis service.
+`scripts/fixtures.ts` retains the bundled original artwork and deterministically generates missing fixture sets for 12 pairs of textured shelf scenes with colored boxes and rounded containers, plus Empty/Low/Full and mismatched variants. `assets/demo/manifest.json` associates zones with references, normalized ROIs and expected evaluation labels. The expected labels are used only in tests. The production detector never reads the manifest; the demo route uses it only to select an allowlisted input file and then calls the ordinary analysis service.
 
 The original generated artwork is marked **CC0** and requires no attribution or downloaded data. All such views are labeled “Synthetic demo images.” Fixtures intentionally sit away from thresholds; actual threshold boundaries are separately unit tested. Full → Low → Empty → Full chronological samples for SH-01 are processed through the same persistence/alert service when seeded.
 
 ## Optional placement comparison
 
-`placement.py` implements `occupied-appearance-lab/1.0`. Setup accepts a correctly
+`src/server/detector.ts` implements `occupied-appearance-lab/1.0`. Setup accepts a correctly
 arranged Full shelf photo under the current stock calibration. The expected photo
 is stored immutably, with same-shelf ownership and a new calibration version. Saving
 or disabling it requires a fresh analysis. Stock recalibration clears the expected
@@ -55,3 +55,9 @@ expected foreground are not evaluated for placement. Staff must inspect the evid
 ## General limits
 
 Visible surface differences are a proxy for coverage. They cannot establish semantic product presence, product identity/count, shelf depth, or hidden inventory. Shadows, reflections, illumination changes, camera movement, similar packaging/background colors and occlusion can cause incorrect results even if quality checks pass. Use a controlled front-facing view; independently inspect the overlay and mask. Default thresholds are presentation choices, not industry standards. No accuracy percentage or probability is claimed.
+
+## Node migration parity and resources
+
+OpenCV/WASM uses the same resize, Gaussian, 8-bit Lab, morphology, connected-component, erosion and overlay operations. ROI rounding uses ties-to-even. Stock occupancy and placement outcome/ratios match expected regression outputs across all 60 bundled samples exactly. Exact histogram medians replace large sortable JavaScript arrays without changing the lighting guard. Mats are released in `finally` blocks.
+
+A local stress run accepted a 20-million-pixel decoded image and a 1024×4096 processing image, taking approximately 9.9 seconds together with peak RSS of 854 MiB. API image processing is serialized per isolate with at most eight queued requests to bound concurrent decoded-image memory. Excess queued work returns 503 for retry. The synchronous WASM work occupies the Node event loop during processing; deployment scaling occurs across function instances. Hosted preview verification remains required.

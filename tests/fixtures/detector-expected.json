@@ -1,0 +1,842 @@
+[
+  {
+    "identifier": "SH-01",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-01",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.34288974719101123,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.3278441011235955,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-01",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7765098314606742,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7439606741573034,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-01",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7770628511235955,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4380486596186521,
+      "compared_ratio": 0.7439606741573034,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-01",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-02",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-02",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3496532654494382,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.33579266151685394,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-02",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7763913272471911,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7438860603932584,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-02",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7769399578651686,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4380925970723418,
+      "compared_ratio": 0.7438860603932584,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-02",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-03",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-03",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3443030196629214,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.3305214185393258,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-03",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7760665379213483,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7434383778089888,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-03",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7766063904494382,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4383682144227647,
+      "compared_ratio": 0.7434383778089888,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-03",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-04",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-04",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.34393433988764044,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.33004740168539326,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-04",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7761060393258427,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7435744382022472,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-04",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7766897823033708,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.43827619587288097,
+      "compared_ratio": 0.7435744382022472,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-04",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-05",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-05",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.34995172050561796,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.3362666783707865,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-05",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7764571629213484,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7439782303370787,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-05",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7769750702247191,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.43809731694079335,
+      "compared_ratio": 0.7439782303370787,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-05",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-06",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-06",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.344263518258427,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.33050825140449436,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-06",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7766063904494382,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7439782303370787,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-06",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.777124297752809,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.43811501522052054,
+      "compared_ratio": 0.7439782303370787,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-06",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-07",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-07",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3442898525280899,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.3308769311797753,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-07",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7778397120786517,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7468354985955056,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-07",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7784015098314607,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.43639772213047795,
+      "compared_ratio": 0.7468354985955056,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-07",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-08",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-08",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3495830407303371,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.33588044241573034,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-08",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7779757724719101,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7467608848314606,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-08",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.778467345505618,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4365294871342761,
+      "compared_ratio": 0.7467608848314606,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-08",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-09",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-09",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3422182233146067,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.32728669241573033,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-09",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7761323735955056,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7435129915730337,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-09",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7766415028089888,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4384363820970236,
+      "compared_ratio": 0.7435129915730337,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-09",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-10",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-10",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.342235779494382,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.3274359199438202,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-10",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7764483848314607,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7440660112359551,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-10",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7769487359550562,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4380810249634279,
+      "compared_ratio": 0.7440660112359551,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-10",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-11",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-11",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.34849455758426967,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.33359813904494384,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-11",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7770935744382023,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.7447902036516854,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-11",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7776290379213483,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.43763148745086716,
+      "compared_ratio": 0.7447902036516854,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-11",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-12",
+    "sample": "empty",
+    "outcome": "Valid",
+    "classification": "Empty",
+    "occupancy_ratio": 0.0,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0.0,
+      "reason": "Too little overlapping product area; inspect stock coverage first.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-12",
+    "sample": "low",
+    "outcome": "Valid",
+    "classification": "Low",
+    "occupancy_ratio": 0.3421436095505618,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.32718574438202247,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-12",
+    "sample": "full",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.776171875,
+    "placement": {
+      "status": "Matches reference",
+      "mismatch_ratio": 0.0,
+      "compared_ratio": 0.743824613764045,
+      "reason": "Compared occupied areas match the expected appearance; missing areas are excluded.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-12",
+    "sample": "misplaced",
+    "outcome": "Valid",
+    "classification": "Full",
+    "occupancy_ratio": 0.7766941713483146,
+    "placement": {
+      "status": "Placement review",
+      "mismatch_ratio": 0.4381936945708166,
+      "compared_ratio": 0.743824613764045,
+      "reason": "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  },
+  {
+    "identifier": "SH-12",
+    "sample": "mismatched",
+    "outcome": "Review required",
+    "classification": null,
+    "occupancy_ratio": null,
+    "placement": {
+      "status": "Not enough evidence",
+      "mismatch_ratio": null,
+      "compared_ratio": 0,
+      "reason": "A reliable stock comparison is required.",
+      "algorithm_version": "occupied-appearance-lab/1.0"
+    }
+  }
+]

@@ -1,20 +1,14 @@
 # Local configuration and runtime data
-.venv/
 .shelfsense-dev.json
 .env
 .env.*
 !.env.example
-!.env.local.example
-media/
+/backend/media/
+/media/
 *.dump
 *.sql.gz
 
 # Dependencies, builds, and generated caches
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-*.egg-info/
 node_modules/
 .next/
 .next-*/
@@ -24,14 +18,10 @@ node_modules/
 playwright-report/
 test-results/
 coverage/
-htmlcov/
-.coverage
-.coverage.*
 *.log
 
 # Local task inputs and workflow notes
 /AGENTS.md
-/frontend/AGENTS.md
 /build-prompt.md
 /requirements.pdf
 /docs/implementation-plan.md

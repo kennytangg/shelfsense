@@ -1,92 +1,47 @@
 # ShelfSense
 
-ShelfSense is a local supermarket shelf-monitoring prototype. It analyzes shelf
-photos, flags low stock, and tracks restocking tasks. A new photo verifies recovery.
+ShelfSense monitors shelf coverage from a fixed camera using an empty reference photo. The dashboard, calibration, history, restocking tasks, and optional placement comparison run in one Next.js application with PostgreSQL. Image processing uses Sharp and OpenCV/WASM in Node.
 
-Built with Next.js, React, FastAPI, PostgreSQL, and OpenCV.
-
-## Run locally
-
-Install **Node 24 LTS**, **Python 3.12**, and **Docker**. Keep Docker running,
-then run this command from the repository root:
-
-```sh
-npm run dev
-```
-
-The launcher installs missing dependencies, prepares the database, applies
-migrations, seeds demo shelves, and starts the frontend and API.
-
-Open the printed URL, normally **http://127.0.0.1:3000**. API documentation is
-normally at **http://127.0.0.1:8000/docs**. Available ports are selected automatically.
-
-Press **Ctrl+C** to stop both apps. PostgreSQL stays running, and later runs reuse
-saved data. The database uses the `shelfsense-postgres` container, `shelfsense_pg`
-volume, and port **5433**.
-
-Keep the generated `.shelfsense-dev.json`, `backend/.env`, and `backend/media`
-to preserve credentials and uploaded images. Do not commit these files.
-
-## Try the demo
-
-1. Click **Run a demo**, choose **Low coverage sample**, and click **Run demo sample**.
-2. Acknowledge the task, then report restocked. The shelf stays Low and shows **Awaiting verification**.
-3. Run **Full coverage sample** to verify recovery. Refresh to see the saved result.
-
-See the [demo guide](docs/demo.md) for the full walkthrough.
-
-Occupied area is an estimate, not a product count. Use matching camera positions
-and similar lighting; this prototype is intended for controlled local demos.
-
-## Project layout
-
-```text
-frontend/src/             Pages, components, and styling
-backend/src/shelfsense/    API, persistence, detector, and demo CLI
-backend/migrations/       Database migrations
-backend/tests/            Detector and API tests
-assets/demo/              Sample images
-scripts/                  Development launcher and workflow checks
-tests/                    Launcher tests
-docs/                     Detailed documentation
-```
-
-## Checks
-
-After local setup, run the relevant checks from the repository root:
+Use Node 24 LTS and PostgreSQL 16 (Docker is supported).
 
 ```sh
 npm ci
+npm run dev
+```
+
+The launcher starts one Next.js process, explicitly migrates PostgreSQL, and seeds missing synthetic demo shelves. It prints the available application URL. Ctrl+C stops the app and keeps saved data. On first setup without `DATABASE_URL`, it provisions the dedicated `shelfsense-postgres` container on port 5433 using the `shelfsense_pg` volume. It also starts that existing container when the configured database uses its local port. Other configured databases must be running before launch.
+
+Configuration lives in root `.env` or process environment variables. Copy `.env.example` to `.env` to configure your own PostgreSQL database; otherwise the launcher provisions the `shelfsense` database and saves its URL in `.env`. Managed images default to `media/`; override with `MEDIA_DIR`. Never commit credentials. Server credentials are never `NEXT_PUBLIC_*` variables.
+
+The UI is in `src/app/` and `src/components/`; the Node API and business logic are in `src/server/`. Route Handlers serve `/api` and owned `/media` images. PostgreSQL access uses parameterized Drizzle SQL and `pg`. The six domain tables use same-shelf ownership and state constraints. The complete initial schema lives in `migrations/0001.sql`; the migration runner records a checksum and safely skips an unchanged applied migration. Use a fresh database for this initial schema; databases created with a different migration history are rejected.
+
+## Commands
+
+```sh
+npm run dev                 # database preparation and one Next.js process
+npm run dev:next            # Next.js only; prepare the database explicitly first
+npm run migrate             # apply the initial schema or verify its recorded checksum
+npm run seed                # only missing demo shelves
+npm run fixtures            # retain bundled CC0 artwork; generate missing fixture sets in Node
+npm run reset-demo -- --yes # preserve user shelves and user-owned images
+npm run typecheck
+npm run format:check
 npm test
-.venv/bin/pytest backend/tests/test_detector.py -q
-.venv/bin/ruff check backend
-.venv/bin/ruff format --check backend
-npm run typecheck --prefix frontend
-npm run format:check --prefix frontend
-npm run build --prefix frontend
+npm run build
+npm start
+npm run test:browser
+npm run backup -- /safe/backup-directory
+npm run migrate:media       # read-only local media audit
+npm run migrate:media -- --apply # copy to private Blob, verify hashes, retain local rollback files
+npm run storage:cleanup     # list old unreferenced Blob objects
+npm run storage:cleanup -- --apply
+npm run watch -- --folder /tmp/shelfsense-inbox --url http://127.0.0.1:3000 --interval 2
 ```
 
-Stop the development frontend before running the production build.
+Stop development Next.js before production builds. Use the launcher’s printed port for browser and uploader commands.
 
-API tests require a **separate test database**. With the Docker database running,
-create it once:
+Tests require a **separate PostgreSQL database name**, configured as `TEST_DATABASE_URL`. Create it using your actual database administrator and local port; grant the application test role permission to create schemas. Tests reject the application database name and use disposable schemas and temporary media. Without the variable, API tests explicitly skip; detector and launcher tests still run. Browser verification requires the test database and Chromium (`npx playwright install chromium`, or `CHROMIUM_EXECUTABLE` pointing to a compatible local executable).
 
-```sh
-docker exec shelfsense-postgres sh -c 'createdb -U "${POSTGRES_USER:-postgres}" -O shelfsense_prototype shelfsense_test'
-```
+The folder uploader watches shelf-identifier subfolders, waits for unchanged size/mtime across scans, rechecks the file after reading, retains source files, and retries service failures. Original-byte SHA-256 receipts deduplicate publication per shelf and calibration version. Atomic rename is recommended. It can upload to the hosted app using `SHELFSENSE_AUTHORIZATION`; it never runs inside Vercel. Use a folder separate from managed media.
 
-Replace `YOUR_PASSWORD` with the generated password from `backend/.env`, then run:
-
-```sh
-export TEST_DATABASE_URL=postgresql+psycopg://shelfsense_prototype:YOUR_PASSWORD@127.0.0.1:5433/shelfsense_test
-.venv/bin/pytest backend/tests -q
-```
-
-Never use the application database for tests. API tests skip when
-`TEST_DATABASE_URL` is unset and refuse the application database name.
-
-## More information
-
-- [Architecture and API](docs/architecture.md)
-- [Detector explanation and limitations](docs/detector.md)
-- [Verification results and tested versions](docs/verification.md)
+Staff reporting restocked changes the task state while preserving measured stock. A subsequent valid photo verifies recovery. Placement review is independent of stock tasks. Unreliable photos and failed setup preserve previous valid findings. See [architecture](docs/architecture.md), [detector](docs/detector.md), [verification](docs/verification.md), and [deployment](docs/deployment.md).

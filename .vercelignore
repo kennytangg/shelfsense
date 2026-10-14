@@ -1,0 +1,8 @@
+backend/
+media/
+.shelfsense-dev.json
+.env
+.env.*
+!.env.example
+*.dump
+*.sql.gz

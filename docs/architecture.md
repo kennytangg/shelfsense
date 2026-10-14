@@ -1,102 +1,52 @@
 # Architecture and API
 
-```mermaid
-flowchart LR
-  Browser[React + TanStack Query] -->|relative /api and /media| Next[Next.js rewrites]
-  Next --> FastAPI
-  FastAPI --> Detector[Independent OpenCV detector]
-  FastAPI --> PG[(PostgreSQL)]
-  FastAPI --> Media[Managed local PNG files]
-```
-
-Next.js owns layouts, navigation, forms, previews, normalized ROI interaction and server-state fetching. App Router layouts/pages are Server Components; interactive workflows are Client Components. No Next.js route handler overlaps `/api`, and no database driver or database credential exists in the frontend. System fonts and local assets avoid runtime CDNs.
+The browser uses the existing React and TanStack Query UI. Relative `/api` and `/media` requests go directly to Node.js Next.js Route Handlers. Server-only modules in `src/server/` own PostgreSQL, validation, private storage, analysis publication, and staff actions. `detector.ts` remains independent of persistence and UI. Pages/layouts are Server Components; interactive workflows are Client Components. Database credentials and image-processing libraries stay out of browser bundles.
 
 ## Data and transactions
 
-The five principal tables are Stores, Shelves, ImageAssets, Analyses and Alerts. The frozen Alembic migration defines foreign keys, valid state/occupancy checks, `(store_id, identifier)` uniqueness, recent-history indexes and a PostgreSQL partial unique index on `alerts(shelf_id) WHERE state IN ('Open','Acknowledged')`. Composite foreign keys require each analysis image, shelf current reference/reading, and alert triggering analysis to belong to the same shelf.
+The six domain tables are `stores`, `shelves`, `image_assets`, `analyses`, `alerts`, and `ingestion_receipts`. The initial SQL migration defines same-shelf composite foreign keys, valid measurement/state checks, unique store/identifier pairs, and partial unique index for one active alert per shelf. The migration journal is infrastructure metadata. The single initial migration is checksum-verified on repeat execution. Existing schemas without matching migration history are rejected; start with a fresh database. Migration execution is explicit at local startup or release, never inside request processing. Unsupported histories and missing required ownership constraints/indexes abort migration.
 
-An upload is byte-limited and decoded. The backend snapshots calibration in a short read transaction, closes it, processes the image, and writes generated-name PNG files. It then locks the shelf row, checks that the calibration version still matches, and commits image metadata, analysis, latest reading, diagnostics and alerts in one short transaction. Related metadata is flushed in dependency order. Competing analyses/staff actions serialize on the shelf row. A changed calibration returns 409 and cleans up generated files. Processing/persistence errors clean up new files; historical assets are never overwritten.
+Image decoding and processing occur outside database transactions. Analysis reads a calibration snapshot, processes and writes new immutable assets, then locks the shelf and rechecks its version. Asset metadata, analysis, latest reading, alert changes and ingestion receipt commit together. Competing analyses and staff actions serialize on the shelf lock. Concurrent receipt duplicates return the existing analysis and clean up their generated files. Calibration races return 409 and remove new assets. Handled persistence failures roll back rows and remove new files; historical files are never overwritten.
 
-File storage and PostgreSQL do not share a transactional filesystem. Handled exceptions remove new files; an abrupt process/OS crash between file creation and commit can leave an unreferenced file. Keep both the media directory and database backed up together. The prototype does not include a crash-orphan collection daemon.
-
-PostgreSQL stores timezone-aware timestamps; Python writes UTC and the browser displays local time. Fresh sessions, pool reconnects and process restarts use saved state. Dashboard totals and filters use the active seeded Store. The live dashboard is queried without browser fetch caching; all mutations invalidate shelf, dashboard, history and alert query caches. Focus/30-second refetch keeps another browser's activity visible.
+Review/setup outcomes are persisted with null classification and occupancy. They update the last-attempt diagnostic while retaining the previous valid reading and placement findings. Calibration or placement changes preserve history and tasks, clear the current reading, and require fresh evidence.
 
 ## Alert state machine
 
-Placement review is a separate current-analysis finding. It adds dashboard attention
-even when stock is Full, but does not acknowledge, open, or resolve a restocking
-task. Stock classification still owns that workflow. Review/setup failures preserve
-the previous valid stock and placement findings. A correctly arranged expected
-reference is required before appearance comparison is enabled.
-
-- Valid Low/Empty creates an Open task if no active task exists; otherwise updates severity, latest triggering analysis and last detection time on that same task.
-- Acknowledge changes only workflow state, retaining urgency and measured status.
-- Report restocked resolves the task with `Staff reported restocked`, records the timestamp, and marks the shelf Awaiting verification. The measurement stays unchanged.
-- A subsequent Low/Empty creates a new episode and clears the waiting marker because the new photo verified a remaining shortage.
-- A valid Full resolves any active task with `Verified full` and clears Awaiting verification.
-- Missing setup, review and decoding errors do not alter alerts.
-- Recalibration retains historical tasks; a new valid analysis is required to resolve/update them.
+- Valid Low/Empty creates an Open task or updates the existing active episode.
+- Acknowledgment changes only workflow state.
+- Staff reporting restocked resolves that episode, records the report, and marks Awaiting verification. The measured stock stays unchanged.
+- A subsequent Low/Empty creates a new episode and clears the waiting marker.
+- Valid Full resolves any active task with `Verified full` and clears the marker.
+- Setup, decoding and review failures do not alter stock tasks.
+- Placement findings add dashboard attention, including Full shelves, independently of stock tasks.
 
 ## REST contract
 
-All routes live in FastAPI. Responses use Pydantic schemas, return managed `/media/<generated-id>.png` URLs, and never expose filesystem paths.
-
-| Method and path | Payload / response |
+| Method/path | Capability |
 | --- | --- |
-| GET `/api/health` | API and PostgreSQL readiness; 503 if database unavailable |
+| GET `/api/health` | PostgreSQL readiness; 503 when unavailable |
 | GET `/api/store` | Active seeded store |
-| GET `/api/dashboard` | Total, Full/Low/Empty, unavailable count, urgency-sorted attention zones |
-| GET `/api/shelves?search=&status=&aisle=` | Store-scoped shelves; `Unavailable` selects zones without a valid current reading |
-| POST `/api/shelves` | JSON: identifier, name, location, optional category; returns created shelf |
-| GET `/api/shelves/{id}` | Calibration, current/last analysis, last attempt diagnostic, active task, awaiting-verification state |
-| POST `/api/shelves/{id}/calibration` | Multipart `file` and JSON-string `config` containing `roi` and `settings`; returns shelf |
-| POST `/api/shelves/{id}/placement` | Multipart full-shelf `file`, JSON-string `config` and integer `calibration_version`; saves expected layout and settings |
-| DELETE `/api/shelves/{id}/placement` | Disables placement comparison, preserving historical references |
-| POST `/api/shelves/{id}/demo-placement` | JSON `calibration_version`; explicitly enables the bundled expected layout on a demo shelf |
-| POST `/api/shelves/{id}/analyses` | Multipart `file`; returns saved analysis, including nullable result for setup/review |
-| GET `/api/shelves/{id}/analyses?limit=50` | Newest-first history; limit 1–200 |
-| GET `/api/images/{id}` | Image metadata and relative URL |
-| GET `/api/alerts?state=Open` | Active/historical alerts, newest detection first; optional exact state filter |
-| PATCH `/api/alerts/{id}` | JSON `{"action":"acknowledge"}` or `{"action":"report_restocked"}` |
-| POST `/api/shelves/{id}/demo-analysis` | JSON `{"sample":"full"}`; allowlist: full, low, empty, mismatched, misplaced; only demo shelves |
+| GET `/api/dashboard` | Stock totals, unavailable count, independent placement count and attention |
+| GET/POST `/api/shelves` | Store-scoped listing/filtering and creation |
+| GET `/api/shelves/{id}` | Setup, current/last readings, tasks, diagnostics and awaiting verification |
+| POST `/api/shelves/{id}/calibration` | Empty reference and validated ROI/settings |
+| POST/DELETE `/api/shelves/{id}/placement` | Expected Full reference/settings, or disable comparison |
+| GET/POST `/api/shelves/{id}/analyses` | Newest-first history (limit 1–200), or image analysis |
+| GET `/api/images/{id}` | Owned asset metadata |
+| GET/PATCH `/api/alerts/{id}` | PATCH staff action; listing is GET `/api/alerts?state=` |
+| POST `/api/shelves/{id}/demo-analysis` | Allowlisted synthetic sample |
+| POST `/api/shelves/{id}/demo-placement` | Explicit synthetic expected-layout setup |
+| POST `/api/uploads` | Shelf/operation-scoped direct-upload ticket, or local storage selection |
+| POST `/api/uploads/blob` | Scoped Blob client upload authorization |
 
-Shelf responses include `placement_reference` and validated `placement_settings`.
-Analysis responses include the immutable `placement_reference`, nullable
-`placement_result` (status, mismatch ratio, compared area, reason, algorithm version),
-and settings in the snapshot. Historical analyses before feature setup return null.
-Dashboard `placement_review` counts current placement findings independently of
-stock totals; `attention` includes Full shelves with placement findings. Shelf
-filter `status=Placement review` selects those findings.
+Response fields preserve the existing UI contract. Validation/image errors use 422, oversize images 413, missing records 404, uniqueness/closed-task/calibration conflicts 409, and database readiness failures 503. API responses are uncached; successful decoded review/setup analyses still return 201. Mutations retain the existing TanStack Query invalidation behavior.
 
-Migration `0002` adds the expected-reference columns and same-shelf ownership
-constraints, analysis evidence, and `ingestion_receipts`. Receipt primary keys are
-`(shelf_id, calibration_version, digest)`. The receipt and analysis commit together
-under the shelf lock; duplicate concurrent publications clean up their newly written
-files and return the existing analysis. A receipt never points to another shelf's
-analysis. Seed/reset behavior remains ownership aware and deletes receipts only
-when explicitly resetting a demo-owned shelf.
+## Storage and upload trust
 
-The explicit `shelfsense watch` worker ingests stable images from shelf-identifier
-subfolders through the same service. There is no watcher in the API process and no
-new asynchronous task or dependency. It rechecks calibration before publication,
-retains source images, logs failure diagnostics, and resumes after service failures.
-Successful receipts survive worker restart. Invalid bytes are logged once for an
-unchanged file in a worker session; modification or restart permits retry. The
-source filesystem and database are separate: receipts give publication deduplication,
-not a guarantee that a producer has finished writing. Atomic rename is recommended.
+Development retains managed PNGs under `media/` by default. Hosted storage uses a private Vercel Blob store. Browser uploads bypass the function payload limit, then send a small JSON processing request. Signed, expiring tickets bind a generated immutable object path to a shelf, operation and calibration version. The server reads only that path from its own Blob store, bounds bytes to 10 MiB, decodes PNG/JPEG with a 20-million-pixel limit, and ignores client MIME/size claims. It never fetches an arbitrary client URL.
 
-Calibration example:
+Calibration/placement retries reuse an asset ID from the signed upload ticket, so a repeated operation does not increment calibration twice. Analysis receipts use the digest of bytes actually read by the server. Successful temporary uploads remain available for ticket retries for 15 minutes; `storage:cleanup --apply` removes uploads and other unreferenced new objects older than one hour. Handled processing failures delete the temporary upload and new artifacts. Run cleanup during maintenance; referenced images are always excluded.
 
-```sh
-curl -X POST http://127.0.0.1:3000/api/shelves/SHELF_UUID/calibration \
-  -F 'file=@assets/demo/zone-01/reference.png' \
-  -F 'config={"roi":{"x":0.05,"y":0.1,"width":0.9,"height":0.8},"settings":{"empty_threshold":0.15,"full_threshold":0.60}}'
-```
+Asset URLs use `/media/{asset-id}.png`. Historical local generated filenames also resolve; after durable migration the route recognizes the corresponding `blob:media/{old-filename}` key. Private media responses stream without buffering the entire asset. Trusted normalized references retain pixel limits without reapplying the original upload byte limit. Media migration verifies uploaded SHA-256 hashes before updating each asset row and retains local files for rollback. Database/filesystem/Blob do not share an atomic transaction; interrupted writes may leave orphans for maintenance cleanup.
 
-Unspecified detector settings receive validated defaults. The form does not mix a JSON request body with multipart uploads. Invalid schema/ROI/image errors use 422; oversize file uses 413; missing shelf/image/task uses 404; unique conflicts, closed-task actions and changed calibration use 409; unavailable PostgreSQL or unseeded store uses 503. Browser proxy/network errors provide a start-the-API message. A successful decode with unreliable analysis returns 201 with the persisted review/setup outcome, no stock classification, warnings and input image.
-
-The synchronous routes run in FastAPI's worker thread pool. OpenCV CPU work does not block an async event loop. The web proxy's 12 MB allowance accommodates multipart overhead; the backend reads at most 10 MiB + 1 file bytes before rejecting. Pillow checks the decoded dimensions before full decode. Media serving is rooted exclusively at `MEDIA_DIR` and request filenames never become storage paths.
-
-## Framework references
-
-The implementation follows [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites), [Next.js proxy body-size configuration](https://nextjs.org/docs/app/api-reference/config/next-config-js/proxyClientMaxBodySize), and [Tailwind's PostCSS installation](https://tailwindcss.com/docs/installation/using-postcss). Installed package types and the production build were used to verify version-specific APIs.
+Hosted requests require operator credentials in `src/proxy.ts` and fail closed if they are missing. Use separate PostgreSQL/Blob stores for preview and production. Configure pooled PostgreSQL URLs and private credentials as server-only environment variables. A Vercel preview remains necessary to verify provider-specific behavior before cutover.
