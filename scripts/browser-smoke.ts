@@ -33,7 +33,7 @@ async function main() {
   let server: ReturnType<typeof spawn> | undefined,
     browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    for (const script of ["migrate", "seed"]) {
+    for (const script of ["migrate", "initialize"]) {
       const r = spawnSync("npm", ["run", script], {
         env,
         stdio: ["ignore", log, log],
@@ -83,119 +83,120 @@ async function main() {
       }),
       errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    const shelves = await (await fetch(base + "/api/shelves")).json(),
-      shelf = shelves.find(
-        (s: { identifier: string }) => s.identifier === "SH-01",
-      ),
-      id = shelf.id;
     await page.goto(base);
-    await expect(page.locator(".shelf-card")).toHaveCount(12);
-    await page.goto(`${base}/shelves/${id}`);
-    await page.getByRole("button", { name: "Enable placement review" }).click();
-    await page.getByRole("button", { name: "Use correct demo layout" }).click();
-    await expect(page.locator("dialog")).toHaveCount(0);
-    await expect(page.locator(".reading-panel .badge")).toHaveText(
-      "Not checked",
-    );
-    async function sample(value: string, placement: string) {
-      await page.getByLabel("Sample image").selectOption(value);
-      await page
-        .getByRole("button", { name: "Run demo sample", exact: true })
-        .click();
-      await expect(page.locator("#demo [role=status]")).toContainText(
-        placement,
-        { timeout: 30000 },
-      );
-      await expect(page.locator(".placement-panel .badge")).toHaveText(
-        placement,
-      );
-    }
-    await sample("low", "Matches reference");
-    await expect(page.locator(".reading-panel .badge")).toHaveText("Low");
-    await page
-      .getByRole("button", { name: "Acknowledge", exact: true })
-      .click();
-    await expect(page.locator(".task-state"))
-      .toContainText("Acknowledged")
-      .catch(async () => {
-        await expect(
-          page.getByText("Acknowledged", { exact: true }).first(),
-        ).toBeVisible();
-      });
-    await page
-      .getByRole("button", { name: "Report restocked", exact: true })
-      .click();
     await expect(
-      page.getByText("Awaiting verification", { exact: true }).first(),
+      page.getByText("Add your first shelf", { exact: false }),
     ).toBeVisible();
-    await expect(page.locator(".reading-panel .badge")).toHaveText("Low");
-    await sample("misplaced", "Placement review");
-    await expect(page.locator(".reading-panel .badge")).toHaveText("Full");
-    await page.getByLabel("Detection overlay").check();
+    await expect(page.locator(".simple-card")).toHaveCount(0);
     await page
-      .getByText("Expected layout for this check", { exact: true })
-      .click();
-    await expect(
-      page.getByAltText("Expected shelf layout for this analysis"),
-    ).toBeVisible();
-    await page.screenshot({
-      path: "/tmp/shelfsense-migration-desktop.png",
-      fullPage: true,
-    });
-    await page.reload();
-    await expect(page.locator(".placement-panel .badge")).toHaveText(
-      "Placement review",
-    );
-    await page.goto(base);
-    await page
-      .getByRole("button", { name: "Placement review", exact: false })
+      .getByRole("link", { name: "Add shelf", exact: true })
       .first()
       .click();
-    await expect(page.locator(".shelf-card")).toHaveCount(1);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${base}/shelves/${id}`);
-    await expect(page.locator(".placement-panel .badge")).toHaveText(
-      "Placement review",
+    await page.getByLabel("Shelf name").fill("Test cereal shelf");
+    await page.getByLabel("Location", { exact: true }).fill("Aisle 1");
+    await page.getByRole("button", { name: "Add shelf", exact: true }).click();
+    await expect(page).toHaveURL(/\/setup$/);
+    const id = new URL(page.url()).pathname.split("/")[2];
+    await page
+      .getByLabel("Shelf photo")
+      .setInputFiles("tests/fixtures/shelves/sh-01-reference.png");
+    await page.getByRole("button", { name: "Use entire image" }).click();
+    await page.locator(".roi-canvas").focus();
+    // Match the frozen fixture's documented area with keyboard controls.
+    for (let n = 0; n < 10; n++) await page.keyboard.press("Shift+ArrowLeft");
+    for (let n = 0; n < 20; n++) await page.keyboard.press("Shift+ArrowUp");
+    for (let n = 0; n < 5; n++) await page.keyboard.press("ArrowRight");
+    for (let n = 0; n < 10; n++) await page.keyboard.press("ArrowDown");
+    await page.getByRole("button", { name: "Save setup", exact: true }).click();
+    await expect(page).toHaveURL(/\/check$/);
+    async function check(name: string, status: string) {
+      await page.goto(base + "/shelves/" + id + "/check");
+      await page
+        .getByLabel("Shelf photo")
+        .setInputFiles("tests/fixtures/shelves/sh-01-" + name + ".png");
+      await page
+        .getByRole("button", { name: "Analyze photo", exact: true })
+        .click();
+      await expect(page).toHaveURL(base + "/shelves/" + id);
+      await expect(page.locator(".result-card .badge")).toHaveText(status, {
+        timeout: 30000,
+      });
+    }
+    await check("low", "Low");
+    await page.goto(base + "/shelves/" + id + "/check");
+    await page
+      .getByLabel("Shelf photo")
+      .setInputFiles("tests/fixtures/shelves/mismatched.png");
+    await page
+      .getByRole("button", { name: "Analyze photo", exact: true })
+      .click();
+    await expect(page).toHaveURL(base + "/shelves/" + id);
+    await expect(page.locator(".result-card .badge")).toHaveText("Low");
+    await expect(
+      page.getByText("Latest check failed:", { exact: false }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "I've restocked this shelf", exact: true })
+      .click();
+    await expect(
+      page.getByText("Waiting for a new photo", { exact: false }),
+    ).toBeVisible();
+    await expect(page.locator(".result-card .badge")).toHaveText("Low");
+    await page.goto(base + "/alerts");
+    await expect(page.locator(".shelf-list .simple-card")).toHaveCount(1);
+    await check("full", "Full");
+    await page.goto(base + "/alerts");
+    await expect(
+      page.getByText("No restocking needed.", { exact: true }),
+    ).toBeVisible();
+    await check("reference", "Empty");
+    await page.goto(base);
+    await page.getByLabel("Status", { exact: true }).selectOption("Empty");
+    await page.getByRole("button", { name: "Apply filter" }).click();
+    await expect(page).toHaveURL(base + "/?status=Empty");
+    await page.reload();
+    await expect(page.locator(".shelf-list .simple-card")).toHaveCount(1);
+    await page.getByLabel("Status", { exact: true }).selectOption("Full");
+    await page.getByRole("button", { name: "Apply filter" }).click();
+    await expect(
+      page.getByRole("link", { name: "Show all shelves" }),
+    ).toBeVisible();
+    await page.goBack();
+    await expect(page.getByLabel("Status", { exact: true })).toHaveValue(
+      "Empty",
     );
+    await page.goForward();
+    await expect(page.getByLabel("Status", { exact: true })).toHaveValue(
+      "Full",
+    );
+    await page.goto(base + "/shelves/" + id + "?setup=1");
+    await expect(page).toHaveURL(/\/setup$/);
+    await page.goto(base + "/help");
+    await expect(
+      page.getByRole("heading", { name: "Help", exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(base + "/shelves/" + id);
+    await expect(page.locator(".result-card .badge")).toHaveText("Empty");
     if (
       !(await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ))
     )
       throw Error("Mobile overflow");
-    await page.screenshot({
-      path: "/tmp/shelfsense-migration-mobile.png",
-      fullPage: true,
-    });
-    await page
-      .getByRole("button", { name: "Expected layout", exact: true })
-      .click();
-    await page
-      .getByLabel("Shelf photo")
-      .setInputFiles("assets/demo/zone-01/full.png");
-    await page
-      .getByRole("button", { name: "Save expected layout", exact: true })
-      .click();
-    await expect(page.locator("dialog")).toHaveCount(0);
-    await sample("low", "Matches reference");
-    await page
-      .getByRole("button", { name: "Expected layout", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Disable placement review", exact: true })
-      .click();
-    await expect(page.locator("dialog")).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Enable placement review" }),
-    ).toBeVisible();
+    await check("low", "Low");
+    const shelves = await (await fetch(base + "/api/shelves")).json();
+    const identifier = shelves.find(
+      (s: { id: string }) => s.id === id,
+    ).identifier;
     // Real local uploader: stable-file checks, restart deduplication and source retention.
     const { FolderMonitor } = await import("./watch");
     const folder = dir + "/inbox";
-    await mkdir(folder + "/SH-01", { recursive: true });
+    await mkdir(folder + "/" + identifier, { recursive: true });
     const { writeFile, access } = await import("node:fs/promises");
     await writeFile(
-      folder + "/SH-01/photo.png",
-      await readFile("assets/demo/zone-01/low.png"),
+      folder + "/" + identifier + "/photo.png",
+      await readFile("tests/fixtures/shelves/sh-01-low.png"),
     );
     const history = async () =>
         (await (await fetch(`${base}/api/shelves/${id}/analyses`)).json())
@@ -210,10 +211,10 @@ async function main() {
     await restart.scan();
     if ((await history()) !== before + 1)
       throw Error("Watcher duplicated ingestion");
-    await access(folder + "/SH-01/photo.png");
+    await access(folder + "/" + identifier + "/photo.png");
     if (errors.length) throw Error(errors.join("; "));
     console.log(
-      "PASS: production browser, placement, restocking, uploads, history, dashboard, mobile, and folder restart deduplication. Screenshots saved in /tmp.",
+      "PASS: empty workspace, create/setup/check pages, real uploads, alerts and verification, URL filters, Back/Forward, keyboard area selection, mobile and folder restart deduplication.",
     );
   } finally {
     await browser?.close();

@@ -1,7 +1,7 @@
-import { query } from "@/server/db";
-import { getShelf } from "@/server/service";
+import { query } from "@/server/database";
+import { getShelf } from "@/server/shelves";
 import { imageStream } from "@/server/storage";
-import { errorResponse } from "@/server/api";
+import { errorResponse } from "@/server/http";
 import { HttpError } from "@/server/validation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

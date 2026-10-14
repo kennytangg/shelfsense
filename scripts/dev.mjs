@@ -79,7 +79,7 @@ async function main() {
   const env = { ...process.env };
   if (!existsSync(resolve(root, "node_modules/.bin/next"))) run("npm", ["ci"]);
   run("npm", ["run", "migrate"], { env });
-  run("npm", ["run", "seed"], { env });
+  run("npm", ["run", "initialize"], { env });
   await startApplication(env);
 }
 

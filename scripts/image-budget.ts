@@ -1,13 +1,13 @@
 import { readFile } from "node:fs/promises";
 import sharp from "sharp";
-import { decode, detect } from "../src/server/detector";
+import { decode, detect } from "../src/server/shelf-analysis";
 import { settingsSchema, roiSchema } from "../src/server/validation";
 async function main() {
   const start = performance.now(),
     roi = roiSchema.parse({}),
     settings = settingsSchema.parse({});
-  const ref = await readFile("assets/demo/zone-01/reference.png"),
-    full = await readFile("assets/demo/zone-01/full.png");
+  const ref = await readFile("tests/fixtures/shelves/sh-01-reference.png"),
+    full = await readFile("tests/fixtures/shelves/sh-01-full.png");
   const huge = async (bytes: Buffer) =>
     decode(
       await sharp(bytes)

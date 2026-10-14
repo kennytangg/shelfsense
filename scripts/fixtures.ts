@@ -15,7 +15,7 @@ const names = [
   "Biscuits",
 ];
 const aisles = ["01 · Breakfast", "02 · Pantry", "03 · Drinks", "04 · Snacks"];
-export async function fixtures(root = "assets/demo") {
+export async function fixtures(root = "tests/fixtures/shelves") {
   // Retain the original CC0 fixtures when present; generation only fills missing sets.
   try {
     const m = JSON.parse(await readFile(`${root}/manifest.json`, "utf8"));
@@ -36,8 +36,8 @@ export async function fixtures(root = "assets/demo") {
     shelves: [] as Record<string, unknown>[],
   };
   for (let index = 0; index < 12; index++) {
-    const folder = `zone-${String(index + 1).padStart(2, "0")}`;
-    await mkdir(`${root}/${folder}`, { recursive: true });
+    const prefix = `sh-${String(index + 1).padStart(2, "0")}`;
+    await mkdir(root, { recursive: true });
     let state = 2026 + index;
     const random = () => {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
@@ -62,7 +62,7 @@ export async function fixtures(root = "assets/demo") {
       .composite([{ input: svg("") }])
       .png()
       .toBuffer();
-    await writeFile(`${root}/${folder}/reference.png`, reference);
+    await writeFile(`${root}/${prefix}-reference.png`, reference);
     const samples: Record<string, Record<string, string>> = {};
     let full = "";
     for (const [variant, num] of [
@@ -79,12 +79,16 @@ export async function fixtures(root = "assets/demo") {
           ];
         shapes += `<rect x="${x}" y="${y}" width="60" height="136" rx="${(n + index) % 3 === 0 ? 12 : 0}" fill="${color}"/><rect x="${x + 6}" y="${y + 42}" width="46" height="39" fill="#f0ce86"/><text x="${x + 10}" y="${y + 65}" font-size="12" fill="#405a52">${["OATS", "FRESH", "DAILY"][index % 3]}</text>`;
       }
-      await sharp(reference)
-        .composite([{ input: svg(shapes) }])
-        .png()
-        .toFile(`${root}/${folder}/${variant}.png`);
+      if (variant !== "empty")
+        await sharp(reference)
+          .composite([{ input: svg(shapes) }])
+          .png()
+          .toFile(`${root}/${prefix}-${variant}.png`);
       samples[variant] = {
-        file: `${folder}/${variant}.png`,
+        file:
+          variant === "empty"
+            ? `${prefix}-reference.png`
+            : `${prefix}-${variant}.png`,
         expected: variant[0].toUpperCase() + variant.slice(1),
       };
       if (variant === "full") full = shapes;
@@ -97,26 +101,27 @@ export async function fixtures(root = "assets/demo") {
     await sharp(reference)
       .composite([{ input: svg(full + changed) }])
       .png()
-      .toFile(`${root}/${folder}/misplaced.png`);
+      .toFile(`${root}/${prefix}-misplaced.png`);
     samples.misplaced = {
-      file: `${folder}/misplaced.png`,
+      file: `${prefix}-misplaced.png`,
       expected: "Full",
       expected_placement: "Placement review",
     };
-    await sharp({
-      create: { width: 400, height: 640, channels: 3, background: "#222222" },
-    })
-      .png()
-      .toFile(`${root}/${folder}/mismatched.png`);
+    if (index === 0)
+      await sharp({
+        create: { width: 400, height: 640, channels: 3, background: "#222222" },
+      })
+        .png()
+        .toFile(`${root}/mismatched.png`);
     samples.mismatched = {
-      file: `${folder}/mismatched.png`,
+      file: `mismatched.png`,
       expected: "Review required",
     };
     manifest.shelves.push({
       identifier: `SH-${String(index + 1).padStart(2, "0")}`,
       name: names[index],
       location: aisles[Math.floor(index / 3)],
-      reference: `${folder}/reference.png`,
+      reference: `${prefix}-reference.png`,
       roi: { x: 0.05, y: 0.1, width: 0.9, height: 0.8 },
       samples,
     });

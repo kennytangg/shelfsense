@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
-import { pool, query } from "../src/server/db";
+import { pool, query } from "../src/server/database";
 import { readImage } from "../src/server/storage";
 async function main() {
   const dir = process.argv[2];

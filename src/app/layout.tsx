@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
-import { Workspace } from "@/components/workspace";
+import { Workspace } from "@/components/workspace-shell";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "ShelfSense · Store operations",

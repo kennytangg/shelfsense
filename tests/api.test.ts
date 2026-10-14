@@ -10,9 +10,9 @@ const application = process.env.DATABASE_URL;
 const target = process.env.TEST_DATABASE_URL;
 const enabled = !!target;
 let admin: Pool, schema: string, media: string;
-let db: typeof import("../src/server/db"),
-  service: typeof import("../src/server/service"),
-  api: typeof import("../src/server/api"),
+let db: typeof import("../src/server/database"),
+  service: typeof import("../src/server/shelves"),
+  api: typeof import("../src/server/http"),
   migration: typeof import("../scripts/migrate");
 const paths = ["reference", "low", "empty", "full", "misplaced", "mismatched"];
 const images: Record<string, Buffer> = {};
@@ -34,21 +34,17 @@ before(async () => {
   process.env.DATABASE_URL = url.toString();
   media = await mkdtemp(tmpdir() + "/shelfsense-node-");
   process.env.MEDIA_DIR = media;
-  db = await import("../src/server/db");
-  service = await import("../src/server/service");
-  api = await import("../src/server/api");
+  db = await import("../src/server/database");
+  service = await import("../src/server/shelves");
+  api = await import("../src/server/http");
   migration = await import("../scripts/migrate");
   await migration.migrate();
-  const now = new Date();
-  await db.insert("stores", {
-    id: randomUUID(),
-    name: "Test store",
-    demo: true,
-    created_at: now,
-    updated_at: now,
-  });
+  const { initialize } = await import("../scripts/maintenance");
+  await initialize();
   for (const name of paths)
-    images[name] = await readFile(`assets/demo/zone-01/${name}.png`);
+    images[name] = await readFile(
+      `tests/fixtures/shelves/${name === "reference" || name === "empty" ? "sh-01-reference" : name === "mismatched" ? "mismatched" : "sh-01-" + name}.png`,
+    );
 });
 after(async () => {
   if (!admin) return;
@@ -108,6 +104,39 @@ async function detail(id: string) {
 }
 const integration = (name: string, fn: () => Promise<void>) =>
   test(name, { skip: !enabled ? "TEST_DATABASE_URL required" : false }, fn);
+integration(
+  "shared store initialization is empty, idempotent and rejects ambiguous ownership",
+  async () => {
+    const { initialize } = await import("../scripts/maintenance");
+    const before = await service.activeStore();
+    assert.equal(before.demo, false);
+    assert.deepEqual(await service.listShelves(), []);
+    await initialize();
+    assert.equal((await service.activeStore()).id, before.id);
+    const response = await request("/shelves", "POST", {
+      name: "First shelf",
+      location: "Entry aisle",
+    });
+    assert.equal(response.status, 201);
+    const shelf = await response.json();
+    assert.match(shelf.identifier, /^shelf-[A-Za-z0-9_-]+$/);
+    await initialize();
+    assert.equal((await detail(shelf.id)).name, "First shelf");
+    const other = await db.insert("stores", {
+      id: randomUUID(),
+      name: "Ambiguous store",
+      demo: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+    try {
+      await assert.rejects(initialize, /Multiple stores/);
+      await assert.rejects(service.activeStore, /Multiple stores/);
+    } finally {
+      await db.query("DELETE FROM stores WHERE id=$1", [other.id]);
+    }
+  },
+);
 integration(
   "fresh migrations and repeat execution preserve existing records",
   async () => {
@@ -179,6 +208,7 @@ integration(
     assert.equal((await detail(id)).active_alert.id, alert.id);
     await calibrate(id);
     assert.equal((await detail(id)).current, null);
+    assert.equal((await detail(id)).active_alert.id, alert.id);
     assert.ok((await request(`/shelves/${id}/analyses`)).status === 200);
   },
 );
@@ -211,7 +241,21 @@ integration(
     );
     assert.equal((await detail(id)).active_alert.id, alert.id);
     assert.equal((await detail(id)).current, null);
-    const actual = await upload(id, "misplaced");
+    // Historical service callers can still compare placement; new HTTP checks are stock-only.
+    const historicalId = await service.analyze(
+      id,
+      await (
+        await import("../src/server/shelf-analysis")
+      ).decode(images.misplaced),
+    );
+    const actual = {
+      data: await service.analysisOut(
+        (
+          await db.query("SELECT * FROM analyses WHERE id=$1", [historicalId])
+        )[0],
+      ),
+    };
+    assert.ok(actual.data);
     assert.equal(actual.data.classification, "Full");
     assert.equal(actual.data.placement_result.status, "Placement review");
     assert.equal((await detail(id)).active_alert, null);
@@ -220,6 +264,9 @@ integration(
     const dash = await (await request("/dashboard")).json();
     assert.ok(dash.attention.some((s: { id: string }) => s.id === id));
     assert.ok(dash.placement_review > 0);
+    const stockOnly = await upload(id, "misplaced");
+    assert.equal(stockOnly.data.placement_result, null);
+    assert.ok((await detail(id)).placement_reference);
     assert.equal(
       (await request(`/shelves/${id}/placement`, "DELETE")).status,
       200,
@@ -227,7 +274,7 @@ integration(
     assert.equal((await detail(id)).placement_reference, null);
     const history = await (await request(`/shelves/${id}/analyses`)).json();
     assert.equal(
-      history.find((a: { id: string }) => a.id === actual.data.id)
+      history.find((a: { id: string }) => a.id === historicalId)
         .placement_reference.id,
       actual.data.placement_reference.id,
     );
@@ -238,7 +285,7 @@ integration(
   async () => {
     const id = await create();
     await calibrate(id);
-    const { decode } = await import("../src/server/detector"),
+    const { decode } = await import("../src/server/shelf-analysis"),
       image = await decode(images.low),
       digest = createHash("sha256").update(images.low).digest("hex");
     const before = (await readdir(media)).length;
@@ -260,7 +307,7 @@ integration(
   async () => {
     const id = await create();
     await calibrate(id);
-    const { decode } = await import("../src/server/detector"),
+    const { decode } = await import("../src/server/shelf-analysis"),
       image = await decode(images.low);
     const before = await readdir(media);
     await assert.rejects(
@@ -342,7 +389,7 @@ integration(
           sample: "../../etc/passwd",
         })
       ).status,
-      422,
+      404,
     );
   },
 );
@@ -383,7 +430,7 @@ integration(
   "upload tickets validate ownership and retry calibration/placement once",
   async () => {
     const id = await create(),
-      { decode } = await import("../src/server/detector"),
+      { decode } = await import("../src/server/shelf-analysis"),
       { calibrationSchema, placementSchema } = await import(
         "../src/server/validation"
       );
@@ -418,7 +465,7 @@ integration(
       layoutId,
     );
     assert.equal((await detail(id)).calibration_version, 2);
-    const uploads = await import("../src/server/uploads");
+    const uploads = await import("../src/server/upload-tickets");
     process.env.BLOB_READ_WRITE_TOKEN = "test-configured";
     process.env.UPLOAD_SIGNING_SECRET = "test-only-secret-for-validation";
     try {

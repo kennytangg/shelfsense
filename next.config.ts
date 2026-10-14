@@ -5,6 +5,5 @@ const config: NextConfig = {
   outputFileTracingExcludes: {
     "/*": ["./backend/**/*", "./media/**/*", "./.env*"],
   },
-  outputFileTracingIncludes: { "/api/*": ["./assets/demo/**/*"] },
 };
 export default config;

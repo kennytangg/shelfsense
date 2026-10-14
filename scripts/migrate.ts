@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { pool, transaction } from "../src/server/db";
+import { pool, transaction } from "../src/server/database";
 export async function migrate() {
   await transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(762411)");

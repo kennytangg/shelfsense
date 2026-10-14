@@ -29,3 +29,8 @@ coverage/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Obsolete Python tooling caches (the application uses Node.js only)
+.ruff_cache/
+__pycache__/
+.venv/

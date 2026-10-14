@@ -15,6 +15,7 @@
     "dev:next": "next dev --webpack --hostname 127.0.0.1",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts && node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "migrate": "node --conditions=react-server --import tsx scripts/migrate.ts",
+    "initialize": "node --conditions=react-server --import tsx scripts/maintenance.ts initialize",
     "seed": "node --conditions=react-server --import tsx scripts/maintenance.ts seed",
     "fixtures": "node --conditions=react-server --import tsx scripts/fixtures.ts",
     "reset-demo": "node --conditions=react-server --import tsx scripts/maintenance.ts reset-demo",

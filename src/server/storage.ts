@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { put, del, get } from "@vercel/blob";
-import { png, type RGB } from "./detector";
+import { png, type RGB } from "./shelf-analysis";
 import { HttpError } from "./validation";
 export const mediaRoot = () => resolve(process.env.MEDIA_DIR || "media");
 function localKey(key: string) {

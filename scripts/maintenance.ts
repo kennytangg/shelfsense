@@ -1,18 +1,23 @@
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { pool, transaction, query, insert } from "../src/server/db";
-import { calibrate, analyze } from "../src/server/service";
-import { decode } from "../src/server/detector";
+import { pool, transaction, query, insert } from "../src/server/database";
+import { calibrate, analyze } from "../src/server/shelves";
+import { decode } from "../src/server/shelf-analysis";
 import { calibrationSchema } from "../src/server/validation";
 import { cleanup } from "../src/server/storage";
 import { fixtures } from "./fixtures";
-export async function seed() {
-  const manifest = await fixtures();
-  const storeId = await transaction(async (c) => {
+export async function initialize() {
+  return transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(762410)");
     const current = (
-      await query("SELECT * FROM stores WHERE demo=true", [], c)
+      await query("SELECT * FROM stores ORDER BY created_at,id", [], c)
     )[0];
+    if ((await query("SELECT id FROM stores", [], c)).length > 1)
+      throw Error(
+        "Multiple stores found; shared store initialization is ambiguous.",
+      );
     if (current) return current.id;
     const now = new Date();
     return (
@@ -20,9 +25,9 @@ export async function seed() {
         "stores",
         {
           id: randomUUID(),
-          name: "Greenway Market",
-          location: "University demo store",
-          demo: true,
+          name: "ShelfSense store",
+          location: "Shared store",
+          demo: false,
           created_at: now,
           updated_at: now,
         },
@@ -30,63 +35,74 @@ export async function seed() {
       )
     ).id;
   });
-  for (const [index, e] of manifest.shelves.entries()) {
-    const id = await transaction(async (c) => {
-      await c.query("SELECT pg_advisory_xact_lock(762410)");
-      if (
-        (
-          await query(
-            "SELECT id FROM shelves WHERE store_id=$1 AND identifier=$2",
-            [storeId, e.identifier],
+}
+export async function seed() {
+  const fixtureDirectory = await mkdtemp(join(tmpdir(), "shelfsense-seed-"));
+  try {
+    const manifest = await fixtures(fixtureDirectory);
+    const storeId = await initialize();
+    for (const [index, e] of manifest.shelves.entries()) {
+      const id = await transaction(async (c) => {
+        await c.query("SELECT pg_advisory_xact_lock(762410)");
+        if (
+          (
+            await query(
+              "SELECT id FROM shelves WHERE store_id=$1 AND identifier=$2",
+              [storeId, e.identifier],
+              c,
+            )
+          ).length
+        )
+          return null;
+        const now = new Date();
+        return (
+          await insert(
+            "shelves",
+            {
+              id: randomUUID(),
+              store_id: storeId,
+              identifier: e.identifier,
+              name: e.name,
+              location: e.location,
+              category: "Groceries",
+              demo: true,
+              settings: {},
+              placement_settings: {},
+              calibration_version: 0,
+              created_at: now,
+              updated_at: now,
+            },
             c,
           )
-        ).length
-      )
-        return null;
-      const now = new Date();
-      return (
-        await insert(
-          "shelves",
-          {
-            id: randomUUID(),
-            store_id: storeId,
-            identifier: e.identifier,
-            name: e.name,
-            location: e.location,
-            category: "Groceries",
-            demo: true,
-            settings: {},
-            placement_settings: {},
-            calibration_version: 0,
-            created_at: now,
-            updated_at: now,
-          },
-          c,
-        )
-      ).id;
-    });
-    if (!id) continue;
-    await calibrate(
-      id,
-      await decode(await readFile(`assets/demo/${e.reference}`)),
-      calibrationSchema.parse({ roi: e.roi }),
-      true,
-    );
-    const variants =
-      index === 0
-        ? ["full", "low", "empty", "full"]
-        : [["full", "low", "empty"][index % 3]];
-    for (const [step, variant] of variants.entries())
-      await analyze(
+        ).id;
+      });
+      if (!id) continue;
+      await calibrate(
         id,
-        await decode(await readFile(`assets/demo/${e.samples[variant].file}`)),
-        {
-          demo: true,
-          timestamp: new Date(
-            Date.now() - 20 * 60000 * (variants.length - step),
-          ),
-        },
+        await decode(await readFile(join(fixtureDirectory, e.reference))),
+        calibrationSchema.parse({ roi: e.roi }),
+        true,
       );
+      const variants =
+        index === 0
+          ? ["full", "low", "empty", "full"]
+          : [["full", "low", "empty"][index % 3]];
+      for (const [step, variant] of variants.entries())
+        await analyze(
+          id,
+          await decode(
+            await readFile(join(fixtureDirectory, e.samples[variant].file)),
+          ),
+          {
+            demo: true,
+            timestamp: new Date(
+              Date.now() - 20 * 60000 * (variants.length - step),
+            ),
+          },
+        );
+    }
+  } finally {
+    await rm(fixtureDirectory, { recursive: true, force: true });
   }
 }
 export async function resetDemo() {
@@ -141,11 +157,13 @@ export async function resetDemo() {
 if (process.argv[1]?.endsWith("maintenance.ts")) {
   const cmd = process.argv[2];
   const work =
-    cmd === "seed"
-      ? seed()
-      : cmd === "reset-demo" && process.argv.includes("--yes")
-        ? resetDemo()
-        : Promise.reject(Error("Use seed or reset-demo --yes"));
+    cmd === "initialize"
+      ? initialize()
+      : cmd === "seed"
+        ? seed()
+        : cmd === "reset-demo" && process.argv.includes("--yes")
+          ? resetDemo()
+          : Promise.reject(Error("Use initialize, seed or reset-demo --yes"));
   work
     .then(() => console.log("Maintenance complete; user-owned data preserved."))
     .catch((e) => {

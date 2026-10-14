@@ -1,6 +1,6 @@
 # Architecture and API
 
-The browser uses the existing React and TanStack Query UI. Relative `/api` and `/media` requests go directly to Node.js Next.js Route Handlers. Server-only modules in `src/server/` own PostgreSQL, validation, private storage, analysis publication, and staff actions. `detector.ts` remains independent of persistence and UI. Pages/layouts are Server Components; interactive workflows are Client Components. Database credentials and image-processing libraries stay out of browser bundles.
+The browser uses the existing React and TanStack Query UI. Relative `/api` and `/media` requests go directly to Node.js Next.js Route Handlers. Server-only modules in `src/server/` own PostgreSQL, validation, private storage, analysis publication, and staff actions. `shelf-analysis.ts` remains independent of persistence and UI. Pages/layouts are Server Components; interactive workflows are Client Components. Database credentials and image-processing libraries stay out of browser bundles.
 
 ## Data and transactions
 
@@ -18,14 +18,14 @@ Review/setup outcomes are persisted with null classification and occupancy. They
 - A subsequent Low/Empty creates a new episode and clears the waiting marker.
 - Valid Full resolves any active task with `Verified full` and clears the marker.
 - Setup, decoding and review failures do not alter stock tasks.
-- Placement findings add dashboard attention, including Full shelves, independently of stock tasks.
+- Historical placement findings remain independent of stock tasks. The simplified Alerts page includes only active stock alerts and waiting-for-verification shelves. New HTTP checks skip placement comparison.
 
 ## REST contract
 
 | Method/path | Capability |
 | --- | --- |
 | GET `/api/health` | PostgreSQL readiness; 503 when unavailable |
-| GET `/api/store` | Active seeded store |
+| GET `/api/store` | Single shared store (demo flag is not required) |
 | GET `/api/dashboard` | Stock totals, unavailable count, independent placement count and attention |
 | GET/POST `/api/shelves` | Store-scoped listing/filtering and creation |
 | GET `/api/shelves/{id}` | Setup, current/last readings, tasks, diagnostics and awaiting verification |
@@ -34,8 +34,6 @@ Review/setup outcomes are persisted with null classification and occupancy. They
 | GET/POST `/api/shelves/{id}/analyses` | Newest-first history (limit 1–200), or image analysis |
 | GET `/api/images/{id}` | Owned asset metadata |
 | GET/PATCH `/api/alerts/{id}` | PATCH staff action; listing is GET `/api/alerts?state=` |
-| POST `/api/shelves/{id}/demo-analysis` | Allowlisted synthetic sample |
-| POST `/api/shelves/{id}/demo-placement` | Explicit synthetic expected-layout setup |
 | POST `/api/uploads` | Shelf/operation-scoped direct-upload ticket, or local storage selection |
 | POST `/api/uploads/blob` | Scoped Blob client upload authorization |
 
@@ -50,3 +48,44 @@ Calibration/placement retries reuse an asset ID from the signed upload ticket, s
 Asset URLs use `/media/{asset-id}.png`. Historical local generated filenames also resolve; after durable migration the route recognizes the corresponding `blob:media/{old-filename}` key. Private media responses stream without buffering the entire asset. Trusted normalized references retain pixel limits without reapplying the original upload byte limit. Media migration verifies uploaded SHA-256 hashes before updating each asset row and retains local files for rollback. Database/filesystem/Blob do not share an atomic transaction; interrupted writes may leave orphans for maintenance cleanup.
 
 Hosted requests require operator credentials in `src/proxy.ts` and fail closed if they are missing. Use separate PostgreSQL/Blob stores for preview and production. Configure pooled PostgreSQL URLs and private credentials as server-only environment variables. A Vercel preview remains necessary to verify provider-specific behavior before cutover.
+
+## Source layout and dependencies
+
+Keep this prototype as a single application. The PDF's conceptual modules describe responsibilities; they do not require separate services or a folder for every module.
+
+```text
+src/app/          Next.js pages, layouts, API and private-media routes
+src/components/   Client workflows, shared UI and api-client.ts
+src/server/       http.ts → shelves.ts → database.ts / storage.ts
+                  shelf-analysis.ts: independent image-processing functions
+                  upload-tickets.ts: hosted upload authorization
+                  image-queue.ts: bounded processing queue
+scripts/          Startup, migrations, demo generation, uploader and maintenance
+migrations/       Immutable database schema
+tests/fixtures/shelves/      Synthetic demo inputs, manifest and regression evidence
+tests/           Node/Jest regressions and detector baseline
+docs/            Architecture, detector, verification and deployment guides
+```
+
+Routes adapt Next.js requests to `http.ts`; `shelves.ts` owns shelf operations and transactional publication. The analysis module depends on validation and image-processing packages, never on database, HTTP or UI modules. The browser uses `api-client.ts` and never imports server modules. Operational scripts may invoke server modules, but application source must not import scripts or tests. Keep these boundaries without introducing additional package or service layers.
+
+## Requirements and image ownership
+
+`requirements.pdf` describes image input, basic computer vision, full/low/empty shelf status, a simple dashboard, and staff alerts. Placement detection is optional. These responsibilities map to upload controls and Route Handlers, `shelf-analysis.ts`, dashboard/detail components, and the alert workflow in `shelves.ts`. Hosting, backups and the optional folder uploader are operational support for the existing implementation, rather than additional mandatory product features.
+
+The assessment instructions require planning documentation in Jira/Confluence and exclude execution from the assessed deliverables; a later ShelfSense section also describes a prototype. This repository implements that prototype and does not replace the required project charter, scope, WBS/Gantt, activity list, milestones, stakeholder/risk/resource records, success criteria, communication plan, reflections or presentation.
+
+The image folders have different purposes:
+
+- `tests/fixtures/shelves/`: five synthetic CC0 PNGs retained for frozen Full, Low, Empty, invalid-framing and historical placement regressions. One shelf has a reference, full, low and misplaced image plus an invalid-dimension image. Empty samples reuse the reference. The manifest records those relationships. There are no duplicate image bytes. Production does not bundle or read these fixtures; all checks use real upload controls. Frozen cases preserve measured baselines without changing their expected classifications. Additional sample shelves are generated deterministically in temporary directories for tests and explicit developer seeding.
+- `media/`: ignored persistent uploads, references and generated analysis evidence. These are application data, not a test fixture directory. Preserve them with the database for history and rollback.
+- `backend/media/`: retained legacy local data. There is no Python backend service; the legacy path stays in place to protect existing data and historical ownership.
+- Tests use temporary media directories and a separate database; they clean up their own artifacts.
+
+Unused UI screenshots, duplicate demo PNGs, the obsolete Python version file and the duplicate detector verification script were removed. Generated dependency/build/cache directories remain ignored. Do not delete saved media merely to simplify the source tree.
+
+## User pages and initialization
+
+The header links to `/` (Shelves), `/alerts` and `/help`. Creation uses `/shelves/new`; setup and checks use `/shelves/[id]/setup` and `/shelves/[id]/check`. Results use `/shelves/[id]`; legacy `?setup=1` redirects to setup. The single dashboard list filters using `?status=Full|Low|Empty`. Mutation invalidation refreshes shelf, dashboard and alert queries.
+
+`npm run initialize` creates a single shared store only, reuses the existing store regardless of its demo flag, and rejects ambiguous multiple-store data. Normal startup never seeds shelves. Existing records remain intact. There are no runtime sample endpoints, placement controls, or detector tuning inputs.

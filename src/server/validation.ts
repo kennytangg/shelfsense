@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 export const roiSchema = z
   .object({
@@ -38,7 +39,8 @@ export const shelfSchema = z.object({
     .trim()
     .min(1)
     .max(40)
-    .regex(/^[A-Za-z0-9_-]+$/),
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .default(() => `shelf-${randomUUID().slice(0, 24)}`),
   name: z.string().trim().min(1).max(120),
   location: z.string().trim().min(1).max(120),
   category: z.string().trim().max(120).nullable().optional().default(null),

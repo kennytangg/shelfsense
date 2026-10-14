@@ -4,17 +4,21 @@
 
 The application uses one initial schema in `migrations/0001.sql`. API tests exercise fresh and repeated migrations, checksum changes, unsupported migration histories, and rejection of schemas without recorded history. Tests use disposable schemas in a separate `TEST_DATABASE_URL` and temporary media.
 
-The detector matches expected stock and placement outputs for all 60 bundled samples in `tests/fixtures/detector-expected.json`. Tests also cover threshold equality, invalid settings, decoding failures, byte/pixel/dimension/format limits, quality rejection, and EXIF orientation. Trusted normalized references retain decoded-pixel checks while allowing PNGs larger than the original JPEG upload limit.
+The detector matches expected stock and placement outputs for five frozen cases in `tests/fixtures/detector-expected.json`. Tests also cover threshold equality, invalid settings, decoding failures, byte/pixel/dimension/format limits, quality rejection, and EXIF orientation. Trusted normalized references retain decoded-pixel checks while allowing PNGs larger than the original JPEG upload limit.
 
-API regressions cover the complete restocking lifecycle, retained findings on failures, independent placement attention, historical references, concurrent publication, receipt deduplication, calibration races, transactional rollback and generated-file cleanup, ownership constraints, upload ticket tampering, retry-safe calibration/placement, seed idempotency, and ownership-aware demo reset. Additional tests verify hosted access, bounded image processing, fixture generation, and the development launcher.
+API regressions cover the complete restocking lifecycle, retained findings on failures, stock-only HTTP checks and historical placement compatibility, historical references, concurrent publication, receipt deduplication, calibration races, transactional rollback and generated-file cleanup, ownership constraints, upload ticket tampering, retry-safe calibration/placement, seed idempotency, and ownership-aware demo reset. Additional tests verify hosted access, bounded image processing, fixture generation, the development launcher, dependency boundaries, and complete manifest coverage without duplicate image bytes.
 
 ## Required checks
 
-Run `npm run typecheck`, `npm run format:check`, `npm test`, and `npm run build`. Stop development Next.js before building. Run `npm run test:browser` against the production build with a separate test database and Chromium. The browser workflow covers desktop/mobile layout, placement setup/review/disable, restocking, subsequent-photo verification, uploads, history/reload, dashboard filtering, immutable evidence, and folder uploader stable-file/restart deduplication.
+Run `npm run typecheck`, `npm run format:check`, `npm test`, and `npm run build`. Stop development Next.js before building. Run `npm run test:browser` against the production build with a separate test database and Chromium. The browser workflow covers empty installation, creation/setup/check/result pages, keyboard area selection, invalid-photo retention, alerts, restocking, subsequent-photo verification, real uploads, reload and Back/Forward, URL filtering, mobile layout, and folder uploader stable-file/restart deduplication.
 
 ## Local verification result
 
-Verified on 2026-10-14: typecheck, formatting, all 18 Node tests and 2 Jest tests (zero skips), production build, production browser workflows, and Git whitespace checks passed. Database and browser checks used the separate local test database with temporary media. Hosted verification remains pending.
+On 2026-10-14, `npm run typecheck`, `npm run format:check`, `npm test` (21 Node regressions and 2 Jest launcher tests), `npm run build`, `npm run test:browser`, and Git whitespace checks passed. API/browser verification used `shelfsense_simplification_test`, disposable schemas and temporary media, with `TEST_DATABASE_URL` supplied only to the test process. The existing test database belonged to a different role and was left unchanged. No local checks were skipped. The production API trace includes zero test fixtures.
+
+The browser workflow passed empty installation, add/setup/check/result pages, real uploads, invalid-photo retention, staff reporting and subsequent Full recovery, alerts, URL filtering with refresh and Back/Forward, legacy setup redirects, keyboard area adjustment, Help, mobile photo checks and watcher restart deduplication.
+
+Skipped: hosted preview verification, including real private Blob and managed PostgreSQL provider behavior, because hosted credentials are unavailable. No deployment or application-data migration was performed.
 
 ## Runtime measurements
 

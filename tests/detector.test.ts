@@ -8,7 +8,7 @@ import {
   classify,
   comparePlacement,
   MAX_BYTES,
-} from "../src/server/detector";
+} from "../src/server/shelf-analysis";
 import {
   roiSchema,
   settingsSchema,
@@ -71,7 +71,7 @@ test("trusted managed PNGs retain pixel limits while allowing JPEG normalization
 
 test("quality guards retain null measurements", async () => {
   const reference = await decode(
-    await readFile("assets/demo/zone-01/reference.png"),
+    await readFile("tests/fixtures/shelves/sh-01-reference.png"),
   );
   for (const value of [0, 120, 255]) {
     const current = {
@@ -84,26 +84,26 @@ test("quality guards retain null measurements", async () => {
     assert.equal(result.classification, null);
   }
 });
-test("all 60 stock and placement results match expected detector outputs", async () => {
+test("frozen stock and historical placement results match expected detector outputs", async () => {
   const manifest = JSON.parse(
-      await readFile("assets/demo/manifest.json", "utf8"),
+      await readFile("tests/fixtures/shelves/manifest.json", "utf8"),
     ),
     baseline = JSON.parse(
       await readFile("tests/fixtures/detector-expected.json", "utf8"),
     );
   for (const e of manifest.shelves) {
     const reference = await decode(
-        await readFile("assets/demo/" + e.reference),
+        await readFile("tests/fixtures/shelves/" + e.reference),
       ),
       expected = await decode(
-        await readFile("assets/demo/" + e.samples.full.file),
+        await readFile("tests/fixtures/shelves/" + e.samples.full.file),
       );
     for (const [name, sample] of Object.entries(e.samples) as [
       string,
       { file: string },
     ][]) {
       const current = await decode(
-          await readFile("assets/demo/" + sample.file),
+          await readFile("tests/fixtures/shelves/" + sample.file),
         ),
         stock = await detect(reference, current, e.roi, settings),
         p = await comparePlacement(

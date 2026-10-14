@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { put } from "@vercel/blob";
-import { pool, query, transaction } from "../src/server/db";
+import { pool, query, transaction } from "../src/server/database";
 import { readImage, removeImage } from "../src/server/storage";
 async function main() {
   const assets = await query("SELECT * FROM image_assets ORDER BY id");

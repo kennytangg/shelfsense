@@ -1,5 +1,5 @@
 import { list, del } from "@vercel/blob";
-import { pool, query } from "../src/server/db";
+import { pool, query } from "../src/server/database";
 async function main() {
   if (!process.env.BLOB_READ_WRITE_TOKEN)
     throw Error("Blob storage is not configured");

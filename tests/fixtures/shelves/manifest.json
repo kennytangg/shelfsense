@@ -1,0 +1,40 @@
+{
+  "description": "Frozen detector baseline: stock, historical placement and invalid framing. Not used by production.",
+  "shelves": [
+    {
+      "identifier": "SH-01",
+      "name": "Breakfast cereals",
+      "location": "01 · Breakfast",
+      "reference": "sh-01-reference.png",
+      "roi": {
+        "x": 0.05,
+        "y": 0.1,
+        "width": 0.9,
+        "height": 0.8
+      },
+      "samples": {
+        "empty": {
+          "file": "sh-01-reference.png",
+          "expected": "Empty"
+        },
+        "low": {
+          "file": "sh-01-low.png",
+          "expected": "Low"
+        },
+        "full": {
+          "file": "sh-01-full.png",
+          "expected": "Full"
+        },
+        "misplaced": {
+          "file": "sh-01-misplaced.png",
+          "expected": "Full",
+          "expected_placement": "Placement review"
+        },
+        "mismatched": {
+          "file": "mismatched.png",
+          "expected": "Review required"
+        }
+      }
+    }
+  ]
+}
