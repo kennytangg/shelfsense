@@ -46,6 +46,18 @@ export default function Page() {
         visible with its original check time. A shelf needing setup or its first
         check does not have a stock result yet.
       </p>
+      <h2>About the photos</h2>
+      <p>
+        Alert photos show the latest valid check so staff can inspect the shelf
+        before restocking. Shelves marked <strong>Sample shelf</strong> use
+        generated test images. Your own shelves use the photos you upload.
+      </p>
+      <p>
+        Real PNG and JPEG photos are supported. Use an empty reference and a
+        current photo of the same shelf, with the same camera position and
+        lighting. Unrelated stock photos cannot provide a reliable comparison;
+        the app measures visual change rather than recognizing products.
+      </p>
       <Link href="/">Back to shelves</Link>
     </>
   );

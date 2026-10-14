@@ -41,9 +41,13 @@ export function NewShelf() {
         </label>
         <label>
           Location
+          <span className="field-help">
+            Where staff can find this shelf, e.g. Aisle 2, top shelf.
+          </span>
           <input
             required
             maxLength={120}
+            aria-label="Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />
@@ -73,7 +77,12 @@ export function ShelfWorkflow({
   });
   return (
     <>
-      <Link href={`/shelves/${id}`}>Back to shelf</Link>
+      <div className="workflow-navigation">
+        <Link href="/">← Back to shelves</Link>
+        <Link className="button secondary" href="/">
+          Cancel
+        </Link>
+      </div>
       <h1>{mode === "setup" ? "Set up shelf" : "Check shelf"}</h1>
       {query.isPending && <Notice>Loading shelf…</Notice>}
       {query.isError && (
@@ -84,8 +93,9 @@ export function ShelfWorkflow({
       )}
       {query.data && (
         <>
-          <h2>{query.data.name}</h2>
-          <p>{query.data.location}</p>
+          <p className="workflow-context">
+            {query.data.name} · {query.data.location}
+          </p>
           {mode === "setup" ? (
             <CalibrationForm
               shelf={query.data}
@@ -99,9 +109,6 @@ export function ShelfWorkflow({
               <Link href={`/shelves/${id}/setup`}>Set up shelf</Link>
             </Notice>
           )}
-          <p>
-            <Link href={`/shelves/${id}`}>Cancel</Link>
-          </p>
         </>
       )}
     </>
@@ -120,38 +127,45 @@ function CheckForm({ shelf }: { shelf: Shelf }) {
     onError: () => client.invalidateQueries(),
   });
   return (
-    <div className="simple-form">
-      <p>
-        Choose a current photo taken from the same position and lighting as the
-        empty reference below.
-      </p>
-      {shelf.awaiting_verification && (
-        <Notice>
-          A new valid photo verifies restocking. The previous measured status
-          stays visible until then.
-        </Notice>
-      )}
-      <img
-        className="upload-preview"
-        src={shelf.reference!.url}
-        alt="Empty reference for matching the photo framing"
-      />
-      <FilePicker
-        file={file}
-        setFile={(file) => {
-          setFile(file);
-          mutation.reset();
-        }}
-        disabled={mutation.isPending}
-      />
-      {mutation.isError && <Notice error>{mutation.error.message}</Notice>}
-      <button
-        className="button"
-        disabled={!file || mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        {mutation.isPending ? "Analyzing photo…" : "Analyze photo"}
-      </button>
+    <div className="check-layout">
+      <section className="workflow-panel">
+        <h2>Current shelf photo</h2>
+        <p>
+          Choose a current photo taken from the same position and lighting as
+          the empty reference shown here.
+        </p>
+        {shelf.awaiting_verification && (
+          <Notice>
+            A new valid photo verifies restocking. The previous measured status
+            stays visible until then.
+          </Notice>
+        )}
+        <FilePicker
+          file={file}
+          setFile={(file) => {
+            setFile(file);
+            mutation.reset();
+          }}
+          disabled={mutation.isPending}
+        />
+        {mutation.isError && <Notice error>{mutation.error.message}</Notice>}
+        <button
+          className="button"
+          disabled={!file || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? "Analyzing photo…" : "Analyze photo"}
+        </button>
+      </section>
+      <aside className="workflow-panel reference-panel">
+        <h2>Empty reference</h2>
+        <p>Match this framing and lighting when taking your current photo.</p>
+        <img
+          className="upload-preview"
+          src={shelf.reference!.url}
+          alt="Empty reference for matching the photo framing"
+        />
+      </aside>
     </div>
   );
 }

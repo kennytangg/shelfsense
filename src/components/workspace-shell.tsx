@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Brand } from "./ui";
 export function Workspace({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isCollection = pathname === "/" || pathname === "/alerts";
   return (
     <div className="simple-workspace">
       <a className="skip-link" href="#main-content">
@@ -37,7 +38,15 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </header>
-      <main id="main-content" tabIndex={-1}>
+      <main
+        id="main-content"
+        className={
+          isCollection || pathname.startsWith("/shelves/")
+            ? "collection-page"
+            : "reading-container"
+        }
+        tabIndex={-1}
+      >
         {children}
       </main>
     </div>

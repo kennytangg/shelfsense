@@ -97,6 +97,15 @@ async function main() {
     await page.getByRole("button", { name: "Add shelf", exact: true }).click();
     await expect(page).toHaveURL(/\/setup$/);
     const id = new URL(page.url()).pathname.split("/")[2];
+    await expect(page.locator(".step-strip")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Save setup", exact: true }),
+    ).toBeDisabled();
+    const cancel = page.getByRole("link", { name: "Cancel", exact: true });
+    expect((await cancel.boundingBox())!.y).toBeLessThan(300);
+    await cancel.click();
+    await expect(page).toHaveURL(base + "/");
+    await page.goto(base + "/shelves/" + id + "/setup");
     await page
       .getByLabel("Shelf photo")
       .setInputFiles("tests/fixtures/shelves/sh-01-reference.png");
@@ -109,6 +118,13 @@ async function main() {
     for (let n = 0; n < 10; n++) await page.keyboard.press("ArrowDown");
     await page.getByRole("button", { name: "Save setup", exact: true }).click();
     await expect(page).toHaveURL(/\/check$/);
+    await page
+      .getByRole("link", { name: "Back to shelves", exact: false })
+      .click();
+    await expect(page).toHaveURL(base + "/");
+    await page.goto(base + "/shelves/" + id + "/check");
+    await page.getByRole("link", { name: "Cancel", exact: true }).click();
+    await expect(page).toHaveURL(base + "/");
     async function check(name: string, status: string) {
       await page.goto(base + "/shelves/" + id + "/check");
       await page
@@ -212,9 +228,193 @@ async function main() {
     if ((await history()) !== before + 1)
       throw Error("Watcher duplicated ingestion");
     await access(folder + "/" + identifier + "/photo.png");
+
+    // Exercise actual production CSS with several cards without changing stored shelves.
+    const layoutPage = await browser.newPage();
+    const shelf = await (await fetch(`${base}/api/shelves/${id}`)).json();
+    const layoutShelves = Array.from({ length: 6 }, (_, index) => ({
+      ...shelf,
+      id: `${id}-layout-${index}`,
+      name:
+        index === 0
+          ? "Breakfast cereals and pantry essentials on the upper shelf"
+          : `Shelf ${index + 1}`,
+      location:
+        index === 0
+          ? "Aisle 1 · Front of store · Upper shelves"
+          : `Aisle ${index + 1}`,
+      awaiting_verification: index === 1,
+      last_error:
+        index === 2
+          ? "Image framing has an incompatible aspect ratio. Retake from the reference position."
+          : null,
+    }));
+    await layoutPage.route(/\/api\/shelves$/, (route) =>
+      route.fulfill({ json: layoutShelves }),
+    );
+    async function verifyTypographyAndReadingWidth() {
+      expect(
+        await layoutPage.evaluate(async () => {
+          const faces = await document.fonts.load('20px "Bitstream Charter"');
+          return (
+            faces.length > 0 && faces.every((face) => face.status === "loaded")
+          );
+        }),
+      ).toBe(true);
+      await expect(layoutPage.locator("body")).toHaveCSS(
+        "font-family",
+        /sans-serif/,
+      );
+      for (const element of await layoutPage
+        .locator("nav a, button, input, select, .card-location, figcaption")
+        .all()) {
+        await expect(element).toHaveCSS("font-family", /sans-serif/);
+      }
+      for (const badge of await layoutPage.locator(".badge").all()) {
+        await expect(badge).toHaveCSS("font-family", /sans-serif/);
+      }
+      const sizes = await layoutPage.evaluate(() => {
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+        );
+        const sizes = new Set<string>();
+        while (walker.nextNode()) {
+          const parent = walker.currentNode.parentElement;
+          if (!walker.currentNode.textContent?.trim() || !parent) continue;
+          const rect = parent.getBoundingClientRect();
+          if (!rect.width || !rect.height) continue;
+          sizes.add(getComputedStyle(parent).fontSize);
+        }
+        return [...sizes].sort();
+      });
+      expect(sizes).toEqual(["16px", "20px", "32px"]);
+      const reading = await layoutPage
+        .locator(".reading-container, main.collection-page")
+        .first()
+        .boundingBox();
+      expect(reading).not.toBeNull();
+      expect(reading!.width).toBeLessThanOrEqual(1100);
+      const viewport = layoutPage.viewportSize()!;
+      expect(
+        Math.abs(reading!.x * 2 + reading!.width - viewport.width),
+      ).toBeLessThan(2);
+      expect(
+        await layoutPage.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+    }
+    for (const [width, columns] of [
+      [1440, 2],
+      [1024, 2],
+      [768, 2],
+      [640, 2],
+      [639, 1],
+      [390, 1],
+      [320, 1],
+    ]) {
+      await layoutPage.setViewportSize({ width, height: 1100 });
+      for (const path of ["/", "/alerts"]) {
+        await layoutPage.goto(base + path);
+        const cards = layoutPage.locator(".shelf-list > .simple-card");
+        await expect(cards).toHaveCount(6);
+        const boxes = await cards.evaluateAll((cards) =>
+          cards.map((card) => {
+            const { x, y, width } = card.getBoundingClientRect();
+            return { x, y, width };
+          }),
+        );
+        expect(
+          boxes.filter((box) => Math.abs(box.y - boxes[0].y) < 2),
+        ).toHaveLength(columns);
+        expect(boxes[columns].y).toBeGreaterThan(boxes[0].y);
+        if (columns > 1) expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+        await verifyTypographyAndReadingWidth();
+        if (path === "/alerts") {
+          await expect(layoutPage.locator(".alert-evidence")).toHaveCount(6);
+          await expect(
+            layoutPage.locator(".alert-evidence img").first(),
+          ).toHaveCSS("object-fit", "contain");
+        }
+        if ([1440, 768, 390].includes(width)) {
+          for (const photo of await layoutPage
+            .locator(".alert-evidence img")
+            .all()) {
+            await photo.scrollIntoViewIfNeeded();
+            await expect
+              .poll(() =>
+                photo.evaluate(
+                  (image: HTMLImageElement) =>
+                    image.complete && image.naturalWidth > 0,
+                ),
+              )
+              .toBe(true);
+          }
+          await layoutPage.evaluate(() => window.scrollTo(0, 0));
+          await layoutPage.screenshot({
+            path: `/tmp/shelfsense-ui-${path === "/" ? "shelves" : "alerts"}-${width}.png`,
+            fullPage: true,
+          });
+        }
+      }
+      for (const path of [
+        "/help",
+        "/shelves/new",
+        `/shelves/${id}`,
+        `/shelves/${id}/setup`,
+        `/shelves/${id}/check`,
+      ]) {
+        await layoutPage.goto(base + path);
+        if (path.includes(id)) {
+          await expect(
+            layoutPage.getByText("Test cereal shelf", { exact: false }).first(),
+          ).toBeVisible();
+        }
+        if (path.endsWith("/setup") || path.endsWith("/check")) {
+          const panels = layoutPage.locator(".workflow-panel");
+          await expect(panels).toHaveCount(2);
+          const first = (await panels.nth(0).boundingBox())!;
+          const second = (await panels.nth(1).boundingBox())!;
+          if (width >= 768) {
+            expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+            expect(second.x).toBeGreaterThan(first.x);
+          } else {
+            expect(second.y).toBeGreaterThan(first.y);
+          }
+          await expect(layoutPage.getByLabel("Shelf photo")).toHaveCSS(
+            "opacity",
+            "0",
+          );
+          if ([1440, 390].includes(width)) {
+            await layoutPage.screenshot({
+              path: `/tmp/shelfsense-ui-${path.endsWith("/setup") ? "setup" : "check"}-${width}.png`,
+              fullPage: true,
+            });
+          }
+        }
+        await verifyTypographyAndReadingWidth();
+        await expect(layoutPage.locator("body")).toHaveCSS("font-size", "20px");
+        await expect(layoutPage.locator("body")).toHaveCSS(
+          "line-height",
+          "35px",
+        );
+        await expect(layoutPage.locator("body")).toHaveCSS(
+          "font-family",
+          /sans-serif/,
+        );
+        if (path === "/help" && [1440, 390].includes(width)) {
+          await layoutPage.screenshot({
+            path: `/tmp/shelfsense-ui-help-${width}.png`,
+            fullPage: true,
+          });
+        }
+      }
+    }
+    await layoutPage.close();
     if (errors.length) throw Error(errors.join("; "));
     console.log(
-      "PASS: empty workspace, create/setup/check pages, real uploads, alerts and verification, URL filters, Back/Forward, keyboard area selection, mobile and folder restart deduplication.",
+      "PASS: empty workspace, create/setup/check pages, real uploads, alerts and verification, URL filters, Back/Forward, keyboard area selection, folder restart deduplication; 1/2-column shelves and alerts, three font sizes, centered layouts and direct workflow exits and no overflow across seven screen widths.",
     );
   } finally {
     await browser?.close();

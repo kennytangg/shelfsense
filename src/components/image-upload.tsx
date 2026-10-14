@@ -58,8 +58,10 @@ export function FilePicker({
       >
         <UploadCloud size={26} />
         <strong>{file ? file.name : prompt}</strong>
-        <span>or drop it here · PNG or JPEG · up to 10 MB</span>
+        <span>Click to upload or drag &amp; drop</span>
+        <span>PNG or JPEG · up to 10 MB</span>
         <input
+          className="dropzone-input"
           type="file"
           disabled={disabled}
           aria-label="Shelf photo"
