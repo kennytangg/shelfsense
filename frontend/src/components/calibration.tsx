@@ -58,14 +58,36 @@ export function CalibrationForm({
   }
   return (
     <div className="calibration-form">
+      <ol className="step-strip" aria-label="Calibration steps">
+        <li className={!preview ? "current" : ""}>
+          <span>01</span>Empty reference
+        </li>
+        <li className={preview ? "current" : ""}>
+          <span>02</span>Select area
+        </li>
+        <li>
+          <span>03</span>Save & check
+        </li>
+      </ol>
       <p>
         Use an empty reference and a current photo taken from the same position.
       </p>
-      <FilePicker file={file} setFile={setFile}>
+      <h3 className="form-section-title">
+        <span>01</span>Start with an empty shelf
+      </h3>
+      <FilePicker
+        file={file}
+        setFile={setFile}
+        disabled={mutation.isPending}
+        prompt="Choose an empty reference photo"
+      >
         <span />
       </FilePicker>
       {preview && (
         <>
+          <h3 className="form-section-title">
+            <span>02</span>Choose the area to monitor
+          </h3>
           <p className="muted">
             Drag across the product display area, or adjust the coordinates
             below. Green marks the selected area.
@@ -134,7 +156,7 @@ export function CalibrationForm({
         </>
       )}
       <details>
-        <summary>Classification & detector settings</summary>
+        <summary>Advanced · Classification & detector settings</summary>
         <div className="form-grid">
           {(Object.keys(settings) as (keyof Settings)[]).map((key) => (
             <label key={key}>

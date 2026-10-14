@@ -62,6 +62,17 @@ export function PlacementForm({
   const pending = setup.isPending || demo.isPending || disable.isPending;
   return (
     <>
+      <ol className="step-strip" aria-label="Placement setup steps">
+        <li className="current">
+          <span>01</span>Correct layout
+        </li>
+        <li>
+          <span>02</span>Save reference
+        </li>
+        <li>
+          <span>03</span>Check new photo
+        </li>
+      </ol>
       <p>
         Use a correctly arranged full shelf photo from the same camera position
         as the empty reference.
@@ -78,7 +89,12 @@ export function PlacementForm({
           alt="Saved expected shelf layout"
         />
       )}
-      <FilePicker file={file} setFile={setFile} />
+      <FilePicker
+        file={file}
+        setFile={setFile}
+        disabled={pending}
+        prompt="Choose a correctly arranged shelf photo"
+      />
       <details>
         <summary>Appearance comparison settings</summary>
         <div className="form-grid">

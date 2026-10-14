@@ -14,6 +14,11 @@ import {
   AlertTriangle,
   PackageOpen,
   CircleDashed,
+  LayoutGrid,
+  List,
+  ScanLine,
+  ArrowUpRight,
+  X,
 } from "lucide-react";
 import { api, Dashboard, date, json, percent, Shelf, Store } from "./api";
 import { Modal, Notice, Status } from "./ui";
@@ -24,6 +29,9 @@ export function DashboardView() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [aisle, setAisle] = useState("");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [sort, setSort] = useState("priority");
   const [adding, setAdding] = useState(false);
   const [upload, setUpload] = useState<Shelf | null>(null);
   const store = useQuery({
@@ -48,49 +56,61 @@ export function DashboardView() {
   const demoShelf = shelves.data?.find(
     (s) => s.identifier === "SH-01" && s.demo,
   );
-  const list = shelves.data?.filter(
-    (s) =>
-      (!search ||
-        `${s.identifier} ${s.name}`
-          .toLowerCase()
-          .includes(search.toLowerCase())) &&
-      (!status ||
-        s.status === status ||
-        (status === "Placement review" &&
-          s.current?.placement_result?.status === "Placement review") ||
-        (status === "Unavailable" && !s.current)) &&
-      (!aisle || s.location === aisle),
-  );
+  const attentionIds = new Set(summary.data?.attention.map((s) => s.id));
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("");
+    setAisle("");
+    setAttentionOnly(false);
+  };
+  const list = shelves.data
+    ?.filter(
+      (s) =>
+        (!search ||
+          `${s.identifier} ${s.name} ${s.location} ${s.category || ""}`
+            .toLowerCase()
+            .includes(search.toLowerCase())) &&
+        (!status ||
+          s.status === status ||
+          (status === "Placement review" &&
+            s.current?.placement_result?.status === "Placement review") ||
+          (status === "Unavailable" && !s.current)) &&
+        (!aisle || s.location === aisle) &&
+        (!attentionOnly || attentionIds.has(s.id)),
+    )
+    .sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "recent")
+        return (b.current?.created_at || "").localeCompare(
+          a.current?.created_at || "",
+        );
+      const priority = (s: Shelf) =>
+        s.status === "Empty"
+          ? 0
+          : s.status === "Low"
+            ? 1
+            : attentionIds.has(s.id)
+              ? 2
+              : !s.current
+                ? 3
+                : 4;
+      return (
+        priority(a) - priority(b) || a.identifier.localeCompare(b.identifier)
+      );
+    });
   const cards = [
     { label: "Total zones", key: "total", filter: "", icon: Boxes },
     { label: "Full", key: "full", filter: "Full", icon: CheckCircle2 },
     { label: "Low", key: "low", filter: "Low", icon: AlertTriangle },
     { label: "Empty", key: "empty", filter: "Empty", icon: PackageOpen },
-    {
-      label: "Placement review",
-      key: "placement_review",
-      filter: "Placement review",
-      icon: AlertTriangle,
-    },
-    {
-      label: "No valid reading",
-      key: "unavailable",
-      filter: "Unavailable",
-      icon: CircleDashed,
-    },
   ] as const;
   return (
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">
-            <MapPin size={13} />
-            {store.data?.name || "ShelfSense store"}
-          </p>
+          <p className="eyebrow">YOUR STORE, AT A GLANCE</p>
           <h1>Shelf overview</h1>
-          <p className="muted">
-            See what needs attention. Keep your shelves ready.
-          </p>
+          <p className="muted">Every shelf in sight. Know where to go next.</p>
         </div>
         <div className="actions">
           {demoShelf && (
@@ -123,9 +143,12 @@ export function DashboardView() {
         {cards.map((card) => (
           <button
             key={card.key}
-            className={`summary-card ${status === card.filter ? "selected" : ""} metric-${card.key}`}
-            onClick={() => setStatus(card.filter)}
-            aria-pressed={status === card.filter}
+            className={`summary-card ${status === card.filter && !attentionOnly ? "selected" : ""} metric-${card.key}`}
+            onClick={() => {
+              setStatus(card.filter);
+              setAttentionOnly(false);
+            }}
+            aria-pressed={status === card.filter && !attentionOnly}
           >
             <span>
               {card.label}
@@ -133,42 +156,95 @@ export function DashboardView() {
             </span>
             <strong>{summary.data?.[card.key] ?? "—"}</strong>
             <small>
-              {card.key === "unavailable"
-                ? "Setup, unchecked or review"
-                : card.key === "total"
-                  ? "Monitored shelf zones"
-                  : "Latest valid checks"}
+              {card.key === "total"
+                ? "Across your store"
+                : card.key === "full"
+                  ? "Sufficient visible coverage"
+                  : card.key === "low"
+                    ? "Ready for a restock"
+                    : "Needs attention first"}
             </small>
           </button>
         ))}
       </div>
-      <section className="attention">
+      <div className="review-strip">
+        <span>
+          <ScanLine size={16} />
+          Beyond stock levels
+        </span>
+        <button
+          onClick={() => {
+            setStatus("Placement review");
+            setAttentionOnly(false);
+          }}
+          aria-pressed={status === "Placement review"}
+        >
+          <AlertTriangle size={15} />
+          Placement review{" "}
+          <strong>{summary.data?.placement_review ?? "—"}</strong>
+        </button>
+        <button
+          onClick={() => {
+            setStatus("Unavailable");
+            setAttentionOnly(false);
+          }}
+          aria-pressed={status === "Unavailable"}
+        >
+          <CircleDashed size={15} />
+          No valid reading <strong>{summary.data?.unavailable ?? "—"}</strong>
+        </button>
+      </div>
+      <section className="attention" id="attention">
         <div className="section-heading">
-          <h2>
-            <AlertTriangle size={18} />
-            Attention needed{" "}
-            <span className="count">
-              {summary.data?.attention.length ?? "—"}
-            </span>
-          </h2>
-          <span className="muted">Empty zones first</span>
+          <div>
+            <p className="eyebrow">LET’S START HERE</p>
+            <h2>
+              Attention needed{" "}
+              <span className="count">
+                {summary.data?.attention.length ?? "—"}
+              </span>
+            </h2>
+          </div>
+          <button
+            className="button secondary small"
+            onClick={() => {
+              clearFilters();
+              setAttentionOnly(true);
+              document
+                .getElementById("zones")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            View queue <ArrowRight size={15} />
+          </button>
         </div>
         {summary.data?.attention.length === 0 && (
-          <p>All checked zones have sufficient visible coverage.</p>
+          <div className="empty-state compact">
+            <CheckCircle2 size={26} />
+            <div>
+              <strong>You’re all caught up.</strong>
+              <p>
+                No shelves are currently in the attention queue. Check unread
+                zones for a complete picture.
+              </p>
+            </div>
+          </div>
         )}
         <div className="attention-grid">
-          {summary.data?.attention.slice(0, 4).map((s) => (
+          {summary.data?.attention.slice(0, 4).map((s, index) => (
             <Link
               href={`/shelves/${s.id}`}
               key={s.id}
               className="attention-item"
             >
-              <Status status={s.status} />
-              <strong>{s.name}</strong>
-              <span>
-                {s.identifier} · {s.location}
+              <span className="queue-rank">
+                {String(index + 1).padStart(2, "0")}
               </span>
-              <div className="attention-bottom">
+              <div className="queue-info">
+                <strong>{s.name}</strong>
+                <span>
+                  {s.identifier} · {s.location}
+                </span>
                 <small>
                   {s.awaiting_verification
                     ? "Awaiting verification"
@@ -176,8 +252,9 @@ export function DashboardView() {
                       ? "Inspect product placement"
                       : `${s.active_alert?.state || "Restock"} · ${percent(s.current?.occupancy_ratio)} occupied`}
                 </small>
-                <ArrowRight size={16} />
               </div>
+              <Status status={s.status} />
+              <ArrowUpRight size={17} className="queue-arrow" />
             </Link>
           ))}
         </div>
@@ -188,21 +265,40 @@ export function DashboardView() {
           </p>
         )}
       </section>
-      <section className="shelves-section">
+      <section className="shelves-section" id="zones">
         <div className="section-heading">
-          <h2>
-            Monitored zones <span className="count">{list?.length ?? "—"}</span>
-          </h2>
-          <span className="muted small-text">
-            Synthetic demo images are labeled
-          </span>
+          <div>
+            <h2>
+              Your shelf zones{" "}
+              <span className="count">{list?.length ?? "—"}</span>
+            </h2>
+            <p className="muted small-text">
+              Latest saved readings across your store.
+            </p>
+          </div>
+          <div className="view-switch" aria-label="Shelf display">
+            <button
+              aria-label="Grid view"
+              aria-pressed={view === "grid"}
+              onClick={() => setView("grid")}
+            >
+              <LayoutGrid size={17} />
+            </button>
+            <button
+              aria-label="List view"
+              aria-pressed={view === "list"}
+              onClick={() => setView("list")}
+            >
+              <List size={17} />
+            </button>
+          </div>
         </div>
         <div className="filters">
           <label className="search">
             <Search size={18} />
             <input
               aria-label="Search shelves"
-              placeholder="Search by shelf name or identifier…"
+              placeholder="Find a shelf, aisle, or category…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -238,14 +334,56 @@ export function DashboardView() {
                 <option key={a}>{a}</option>
               ))}
           </select>
+          <select
+            aria-label="Sort shelves"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <option value="priority">Priority first</option>
+            <option value="name">Name A–Z</option>
+            <option value="recent">Latest check</option>
+          </select>
         </div>
+        {(search || status || aisle || attentionOnly) && (
+          <div className="active-filters">
+            <span>
+              {list?.length ?? 0} matching zones
+              {attentionOnly ? " · Attention queue" : ""}
+              {status ? ` · ${status}` : ""}
+            </span>
+            <button className="text-button" onClick={clearFilters}>
+              <X size={13} />
+              Clear filters
+            </button>
+          </div>
+        )}
         {shelves.isPending && <Notice>Loading saved shelf checks…</Notice>}
         {list?.length === 0 && (
-          <Notice>
-            No shelves match. Clear the filters or add a shelf to get started.
-          </Notice>
+          <div className="empty-state">
+            <Boxes size={32} />
+            <h3>
+              {shelves.data?.length === 0
+                ? "Your first shelf starts here."
+                : "No shelves found."}
+            </h3>
+            <p>
+              {shelves.data?.length === 0
+                ? "Add a zone, save an empty reference, and upload your first check."
+                : "Try another name, aisle, or status."}
+            </p>
+            <button
+              className="button secondary"
+              onClick={
+                shelves.data?.length === 0
+                  ? () => setAdding(true)
+                  : clearFilters
+              }
+            >
+              {shelves.data?.length === 0 ? "Add shelf" : "Clear filters"}
+            </button>
+          </div>
         )}
-        <div className="shelf-grid">
+        <div className={`shelf-grid ${view === "list" ? "shelf-list" : ""}`}>
           {list?.map((s) => (
             <article className="shelf-card" key={s.id}>
               <Link href={`/shelves/${s.id}`} className="shelf-image">
@@ -277,7 +415,7 @@ export function DashboardView() {
                   {s.location}
                 </p>
                 <div className="coverage">
-                  <span>Estimated occupied area</span>
+                  <span>Visible coverage</span>
                   <strong>{percent(s.current?.occupancy_ratio)}</strong>
                 </div>
                 <div className="meter">
@@ -294,7 +432,11 @@ export function DashboardView() {
                     {s.awaiting_verification
                       ? "Awaiting verification"
                       : s.active_alert?.state ||
-                        (s.current ? "No active task" : "Setup needed")}
+                        (s.current
+                          ? "No active task"
+                          : s.reference
+                            ? "Ready for first check"
+                            : "Setup needed")}
                   </strong>
                 </div>
                 {s.current?.placement_result?.status === "Placement review" && (
@@ -339,12 +481,24 @@ export function DashboardView() {
         </div>
       </section>
       <footer className="page-footer">
+        <ScanLine size={16} />
         Visible occupied area is a shelf-fullness proxy, not a product count.
         Full means sufficient visible coverage for this demo.
       </footer>
       {upload && <UploadModal shelf={upload} close={() => setUpload(null)} />}
       {adding && (
         <Modal title="Add a shelf zone" close={() => setAdding(false)}>
+          <ol className="step-strip" aria-label="New shelf setup">
+            <li className="current">
+              <span>01</span>Name your zone
+            </li>
+            <li>
+              <span>02</span>Calibrate
+            </li>
+            <li>
+              <span>03</span>First photo
+            </li>
+          </ol>
           <p className="muted">
             One zone per record. You’ll calibrate its empty reference next.
           </p>

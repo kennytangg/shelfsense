@@ -9,21 +9,29 @@ export function FilePicker({
   file,
   setFile,
   children,
+  disabled = false,
+  prompt = "Choose a shelf photo",
 }: {
   file: File | null;
   setFile: (file: File) => void;
   children?: React.ReactNode;
+  disabled?: boolean;
+  prompt?: string;
 }) {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
+  const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    if (!file) return;
+    if (!file) {
+      setPreview("");
+      return;
+    }
     const url = URL.createObjectURL(file);
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
   function select(file?: File) {
-    if (!file) return;
+    if (!file || disabled) return;
     if (!["image/png", "image/jpeg"].includes(file.type)) {
       setError("Choose a PNG or JPEG image.");
       return;
@@ -38,18 +46,24 @@ export function FilePicker({
   return (
     <>
       <label
-        className="dropzone"
-        onDragOver={(e) => e.preventDefault()}
+        className={`dropzone ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           select(e.dataTransfer.files[0]);
         }}
       >
         <UploadCloud size={26} />
-        <strong>{file ? file.name : "Choose a shelf photo"}</strong>
+        <strong>{file ? file.name : prompt}</strong>
         <span>or drop it here · PNG or JPEG · up to 10 MB</span>
         <input
           type="file"
+          disabled={disabled}
           aria-label="Shelf photo"
           accept="image/png,image/jpeg"
           onChange={(e) => select(e.target.files?.[0])}
@@ -90,11 +104,41 @@ export function UploadModal({
   });
   return (
     <Modal title={`Check ${shelf.identifier}`} close={close}>
+      <ol className="step-strip" aria-label="Photo check steps">
+        <li className={!file ? "current" : ""}>
+          <span>01</span>Choose photo
+        </li>
+        <li className={file && !mutation.data ? "current" : ""}>
+          <span>02</span>Analyze shelf
+        </li>
+        <li className={mutation.data ? "current" : ""}>
+          <span>03</span>Review result
+        </li>
+      </ol>
       <p className="muted">
         Use a current photo taken from the same position as the empty reference.
       </p>
+      <div className="upload-context">
+        {shelf.reference && (
+          <img
+            src={shelf.reference.url}
+            alt="Empty reference for matching camera position"
+          />
+        )}
+        <div>
+          <strong>{shelf.name}</strong>
+          <p>{shelf.location} · Match the reference framing and lighting.</p>
+        </div>
+      </div>
+      {shelf.awaiting_verification && (
+        <Notice>
+          Verification check: a new valid photo will confirm whether this shelf
+          has recovered.
+        </Notice>
+      )}
       <FilePicker
         file={file}
+        disabled={mutation.isPending}
         setFile={(file) => {
           setFile(file);
           mutation.reset();
@@ -113,7 +157,7 @@ export function UploadModal({
       )}
       <div className="modal-actions">
         <button className="button secondary" onClick={close}>
-          Done
+          {mutation.data ? "Done" : "Cancel"}
         </button>
         <button
           className="button"

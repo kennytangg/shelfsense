@@ -106,58 +106,12 @@ export function ShelfDetail({ id }: { id: string }) {
           </button>
         </div>
       </div>
-      <section className="panel placement-panel">
-        <div className="section-heading">
-          <h2>Product placement</h2>
-          <button
-            className="button secondary small"
-            disabled={!shelf.reference}
-            onClick={() => setPlacementSetup(true)}
-          >
-            {shelf.placement_reference
-              ? "Expected layout"
-              : "Enable placement review"}
-          </button>
-        </div>
-        {reading?.placement_result ? (
-          <>
-            <Status status={reading.placement_result.status} />
-            <p>{reading.placement_result.reason}</p>
-            <p className="muted">
-              Appearance mismatch:{" "}
-              {percent(reading.placement_result.mismatch_ratio)} · Compared
-              area: {percent(reading.placement_result.compared_ratio)} of the
-              selected region.
-            </p>
-            {reading.placement_result.status === "Placement review" && (
-              <p>
-                Turn on Detection overlay to inspect the orange differences.
-              </p>
-            )}
-            {reading.placement_reference && (
-              <details>
-                <summary>Expected layout for this check</summary>
-                <img
-                  className="upload-preview"
-                  src={reading.placement_reference.url}
-                  alt="Expected shelf layout for this analysis"
-                />
-              </details>
-            )}
-          </>
-        ) : (
-          <p className="muted">
-            {shelf.placement_reference
-              ? "Upload a new photo to check product appearance against the saved layout."
-              : "Save a correctly arranged shelf photo to flag possible misplaced items in a fixed layout."}
-          </p>
-        )}
-        <p className="small-text muted">
-          Lighting, packaging changes, and camera movement can also cause
-          differences. Placement review is separate from stock status and
-          restocking tasks.
-        </p>
-      </section>
+      <nav className="detail-nav" aria-label="Shelf sections">
+        <a href="#check">Current check</a>
+        <a href="#restocking">Restocking</a>
+        <a href="#placement">Product placement</a>
+        <a href="#history">Check history</a>
+      </nav>
       {!shelf.reference && (
         <Notice>
           This zone needs setup. Upload an empty reference and select its
@@ -186,7 +140,7 @@ export function ShelfDetail({ id }: { id: string }) {
           </button>
         </Notice>
       )}
-      <div className="detail-grid">
+      <div className="detail-grid" id="check">
         <section className="panel image-panel">
           <div className="section-heading">
             <h2>
@@ -252,7 +206,7 @@ export function ShelfDetail({ id }: { id: string }) {
         </section>
       </div>
       <div className="detail-grid secondary-grid">
-        <section className="panel">
+        <section className="panel" id="restocking">
           <div className="section-heading">
             <h2>
               <PackageCheck size={18} />
@@ -262,6 +216,29 @@ export function ShelfDetail({ id }: { id: string }) {
               <span className="workflow-state">{shelf.active_alert.state}</span>
             )}
           </div>
+          <ol className="workflow-steps" aria-label="Restocking progress">
+            <li
+              className={
+                shelf.active_alert || shelf.awaiting_verification ? "done" : ""
+              }
+            >
+              01 · Identify
+            </li>
+            <li
+              className={
+                shelf.awaiting_verification
+                  ? "done"
+                  : shelf.active_alert
+                    ? "current"
+                    : ""
+              }
+            >
+              02 · Restock
+            </li>
+            <li className={shelf.awaiting_verification ? "current" : ""}>
+              03 · Verify photo
+            </li>
+          </ol>
           {shelf.awaiting_verification ? (
             <Notice>
               <strong>Awaiting verification</strong>
@@ -270,6 +247,10 @@ export function ShelfDetail({ id }: { id: string }) {
                 The measured status remains {shelf.status}. Upload a new photo
                 to verify.
               </p>
+              <button className="button" onClick={() => setUpload(true)}>
+                <Upload size={16} />
+                Upload verification photo
+              </button>
             </Notice>
           ) : shelf.active_alert ? (
             <>
@@ -385,7 +366,59 @@ export function ShelfDetail({ id }: { id: string }) {
           </section>
         )}
       </div>
-      <section className="panel history-panel">
+      <section className="panel placement-panel" id="placement">
+        <div className="section-heading">
+          <h2>Product placement</h2>
+          <button
+            className="button secondary small"
+            disabled={!shelf.reference}
+            onClick={() => setPlacementSetup(true)}
+          >
+            {shelf.placement_reference
+              ? "Expected layout"
+              : "Enable placement review"}
+          </button>
+        </div>
+        {reading?.placement_result ? (
+          <>
+            <Status status={reading.placement_result.status} />
+            <p>{reading.placement_result.reason}</p>
+            <p className="muted">
+              Appearance mismatch:{" "}
+              {percent(reading.placement_result.mismatch_ratio)} · Compared
+              area: {percent(reading.placement_result.compared_ratio)} of the
+              selected region.
+            </p>
+            {reading.placement_result.status === "Placement review" && (
+              <p>
+                Turn on Detection overlay to inspect the orange differences.
+              </p>
+            )}
+            {reading.placement_reference && (
+              <details>
+                <summary>Expected layout for this check</summary>
+                <img
+                  className="upload-preview"
+                  src={reading.placement_reference.url}
+                  alt="Expected shelf layout for this analysis"
+                />
+              </details>
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            {shelf.placement_reference
+              ? "Upload a new photo to check product appearance against the saved layout."
+              : "Save a correctly arranged shelf photo to flag possible misplaced items in a fixed layout."}
+          </p>
+        )}
+        <p className="small-text muted">
+          Lighting, packaging changes, and camera movement can also cause
+          differences. Placement review is separate from stock status and
+          restocking tasks.
+        </p>
+      </section>
+      <section className="panel history-panel" id="history">
         <div className="section-heading">
           <h2>Recent checks</h2>
           <span className="muted">Newest first · select to inspect</span>
@@ -408,7 +441,7 @@ export function ShelfDetail({ id }: { id: string }) {
             </thead>
             <tbody>
               {history.data?.map((a) => (
-                <tr key={a.id}>
+                <tr key={a.id} aria-selected={selected?.id === a.id}>
                   <td>{date(a.created_at)}</td>
                   <td>
                     <Status status={a.classification || a.outcome} />
