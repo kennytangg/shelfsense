@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { UploadCloud } from "lucide-react";
-import { Notice } from "./ui";
+import { PhotoFrame } from "./photo-frame";
+import { cn } from "@/lib/utils";
+import { Notice } from "./shelf-ui";
 
 export function FilePicker({
   file,
@@ -9,25 +11,27 @@ export function FilePicker({
   children,
   disabled = false,
   prompt = "Choose a shelf photo",
+  existingPreview = "",
 }: {
   file: File | null;
   setFile: (file: File) => void;
   children?: React.ReactNode;
   disabled?: boolean;
   prompt?: string;
+  existingPreview?: string;
 }) {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     if (!file) {
-      setPreview("");
+      setPreview(existingPreview);
       return;
     }
     const url = URL.createObjectURL(file);
     setPreview(url);
     return () => URL.revokeObjectURL(url);
-  }, [file]);
+  }, [file, existingPreview]);
   function select(file?: File) {
     if (!file || disabled) return;
     if (!["image/png", "image/jpeg"].includes(file.type)) {
@@ -43,8 +47,24 @@ export function FilePicker({
   }
   return (
     <>
+      {!children && (
+        <PhotoFrame>
+          {preview ? (
+            <img
+              className="h-full w-full object-contain"
+              src={preview}
+              alt="Selected shelf photo preview"
+            />
+          ) : (
+            <span className="px-4">Choose a photo to preview it.</span>
+          )}
+        </PhotoFrame>
+      )}
       <label
-        className={`dropzone ${dragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+        className={cn(
+          "relative flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-input bg-background p-3 text-center text-sm leading-5 text-primary focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-ring hover:bg-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
+          dragging && "bg-accent",
+        )}
         onDragOver={(e) => {
           e.preventDefault();
           if (!disabled) setDragging(true);
@@ -56,12 +76,11 @@ export function FilePicker({
           select(e.dataTransfer.files[0]);
         }}
       >
-        <UploadCloud size={26} />
-        <strong>{file ? file.name : prompt}</strong>
-        <span>Click to upload or drag &amp; drop</span>
+        <UploadCloud size={20} aria-hidden="true" />
+        <span>{preview ? "Replace photo" : prompt}</span>
         <span>PNG or JPEG · up to 10 MB</span>
         <input
-          className="dropzone-input"
+          className="absolute inset-0 h-full w-full cursor-inherit opacity-0"
           type="file"
           disabled={disabled}
           aria-label="Shelf photo"
@@ -69,14 +88,13 @@ export function FilePicker({
           onChange={(e) => select(e.target.files?.[0])}
         />
       </label>
-      {error && <Notice error>{error}</Notice>}
-      {preview && !children && (
-        <img
-          className="upload-preview"
-          src={preview}
-          alt="Selected shelf photo preview"
-        />
+      {file && (
+        <p className="text-sm leading-5 text-muted-foreground wrap-anywhere">
+          {file.name}
+        </p>
       )}
+      {error && <Notice error>{error}</Notice>}
+
       {children}
     </>
   );

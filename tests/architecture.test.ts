@@ -27,7 +27,8 @@ test("demo manifest uses every bundled image without duplicate bytes", async () 
 
 test("application dependencies preserve browser and analysis boundaries", async () => {
   for (const directory of ["src/components", "src/server"]) {
-    for (const file of await readdir(directory)) {
+    for (const file of await readdir(directory, { recursive: true })) {
+      if (!/\.tsx?$/.test(file)) continue;
       const source = await readFile(`${directory}/${file}`, "utf8");
       const imports = [
         ...source.matchAll(/(?:from\s*|import\s*\()(["'])([^"']+)\1/g),

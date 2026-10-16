@@ -34,6 +34,11 @@ export function verifyTicket(token: string): Ticket {
   return t;
 }
 export async function uploadTicket(shelf: string, operation: string) {
+  if (process.env.VERCEL && !process.env.BLOB_READ_WRITE_TOKEN)
+    throw new HttpError(
+      503,
+      "Image uploads are not configured. Connect a private Blob store and set BLOB_READ_WRITE_TOKEN for this deployment, then redeploy.",
+    );
   const snapshot = await getShelf(shelf);
   if (!process.env.BLOB_READ_WRITE_TOKEN)
     return { storage: "local", ticket: "", pathname: "" };

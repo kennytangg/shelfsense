@@ -146,6 +146,10 @@ async function dispatch(request: Request) {
       const id = parts[1],
         op = parts[2];
       await service.getShelf(id);
+      if (parts.length === 2 && method === "DELETE") {
+        await service.deleteShelf(id);
+        return json({ deleted: true });
+      }
       if (parts.length === 2 && method === "GET")
         return json(await service.shelfOut(await service.getShelf(id)));
       if (parts.length === 3) {

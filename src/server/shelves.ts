@@ -195,6 +195,39 @@ export async function createShelf(payload: Row, demo = false) {
     );
   });
 }
+export async function deleteShelf(id: string) {
+  const keys = await transaction(async (c) => {
+    await getShelf(id, c, true);
+    const assets = await query(
+      "SELECT storage_key FROM image_assets WHERE shelf_id=$1",
+      [id],
+      c,
+    );
+    await update(
+      "shelves",
+      id,
+      {
+        reference_image_id: null,
+        placement_reference_image_id: null,
+        latest_valid_analysis_id: null,
+      },
+      c,
+    );
+    for (const table of [
+      "ingestion_receipts",
+      "alerts",
+      "analyses",
+      "image_assets",
+    ])
+      await query(`DELETE FROM ${table} WHERE shelf_id=$1`, [id], c);
+    await query("DELETE FROM shelves WHERE id=$1", [id], c);
+    return assets.map((asset) => asset.storage_key as string);
+  });
+  // The deletion is committed. Storage failures must not report a failed deletion.
+  await cleanup(keys).catch((error) => {
+    console.error("Deleted shelf media cleanup failed", error);
+  });
+}
 export async function decodeUpload(id: string, bytes: Buffer) {
   await getShelf(id);
   try {

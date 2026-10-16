@@ -22,20 +22,21 @@ Review/setup outcomes are persisted with null classification and occupancy. They
 
 ## REST contract
 
-| Method/path | Capability |
-| --- | --- |
-| GET `/api/health` | PostgreSQL readiness; 503 when unavailable |
-| GET `/api/store` | Single shared store (demo flag is not required) |
-| GET `/api/dashboard` | Stock totals, unavailable count, independent placement count and attention |
-| GET/POST `/api/shelves` | Store-scoped listing/filtering and creation |
-| GET `/api/shelves/{id}` | Setup, current/last readings, tasks, diagnostics and awaiting verification |
-| POST `/api/shelves/{id}/calibration` | Empty reference and validated ROI/settings |
-| POST/DELETE `/api/shelves/{id}/placement` | Expected Full reference/settings, or disable comparison |
-| GET/POST `/api/shelves/{id}/analyses` | Newest-first history (limit 1–200), or image analysis |
-| GET `/api/images/{id}` | Owned asset metadata |
-| GET/PATCH `/api/alerts/{id}` | PATCH staff action; listing is GET `/api/alerts?state=` |
-| POST `/api/uploads` | Shelf/operation-scoped direct-upload ticket, or local storage selection |
-| POST `/api/uploads/blob` | Scoped Blob client upload authorization |
+| Method/path                               | Capability                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| GET `/api/health`                         | PostgreSQL readiness; 503 when unavailable                                 |
+| GET `/api/store`                          | Single shared store (demo flag is not required)                            |
+| GET `/api/dashboard`                      | Stock totals, unavailable count, independent placement count and attention |
+| GET/POST `/api/shelves`                   | Store-scoped listing/filtering and creation                                |
+| GET `/api/shelves/{id}`                   | Setup, current/last readings, tasks, diagnostics and awaiting verification |
+| DELETE `/api/shelves/{id}`                | Permanently delete the shelf, photos, history, receipts and tasks          |
+| POST `/api/shelves/{id}/calibration`      | Empty reference and validated ROI/settings                                 |
+| POST/DELETE `/api/shelves/{id}/placement` | Expected Full reference/settings, or disable comparison                    |
+| GET/POST `/api/shelves/{id}/analyses`     | Newest-first history (limit 1–200), or image analysis                      |
+| GET `/api/images/{id}`                    | Owned asset metadata                                                       |
+| GET/PATCH `/api/alerts/{id}`              | PATCH staff action; listing is GET `/api/alerts?state=`                    |
+| POST `/api/uploads`                       | Shelf/operation-scoped direct-upload ticket, or local storage selection    |
+| POST `/api/uploads/blob`                  | Scoped Blob client upload authorization                                    |
 
 Response fields preserve the existing UI contract. Validation/image errors use 422, oversize images 413, missing records 404, uniqueness/closed-task/calibration conflicts 409, and database readiness failures 503. API responses are uncached; successful decoded review/setup analyses still return 201. Mutations retain the existing TanStack Query invalidation behavior.
 
@@ -86,6 +87,24 @@ Unused UI screenshots, duplicate demo PNGs, the obsolete Python version file and
 
 ## User pages and initialization
 
-The header links to `/` (Shelves), `/alerts` and `/help`. Creation uses `/shelves/new`; setup and checks use `/shelves/[id]/setup` and `/shelves/[id]/check`. Results use `/shelves/[id]`; legacy `?setup=1` redirects to setup. The single dashboard list filters using `?status=Full|Low|Empty`. Mutation invalidation refreshes shelf, dashboard and alert queries.
+The header links to `/` (Shelves) and `/help`. Legacy `/alerts` redirects to `/?view=attention`. Creation uses `/shelves/new`; setup and checks use `/shelves/[id]/setup` and `/shelves/[id]/check`. Results use `/shelves/[id]`; legacy `?setup=1` redirects to setup. The single dashboard list combines measured `?status=Full|Low|Empty` with task filters `?view=restocking|verification|attention`. Task membership comes from active alerts and pending verification, independently of measured stock. Mutation invalidation refreshes shelf, dashboard and alert queries.
 
 `npm run initialize` creates a single shared store only, reuses the existing store regardless of its demo flag, and rejects ambiguous multiple-store data. Normal startup never seeds shelves. Existing records remain intact. There are no runtime sample endpoints, placement controls, or detector tuning inputs.
+
+Shelf deletion requires confirmation in the shelf detail screen. It locks the shelf and removes its dependent records in one transaction, then removes its stored images after commit. In-flight processing cannot publish to a deleted shelf. Media cleanup failures are logged; hosted orphan objects can be removed with `npm run storage:cleanup -- --apply`.
+
+Shelf workflows separate compact linked breadcrumbs from the page heading and location. Informational progress uses checkmarks for saved completed steps, a green numbered current step, and outlined upcoming steps. Onboarding follows Add shelf → Set up shelf → Check stock and is omitted for ordinary repeat checks. Restocking follows Needs restocking → Restock reported → Verify restocking; reporting never changes measured stock.
+
+Noto Sans UI typography uses 14px metadata/controls, 16px body/fields, 18px panel headings and 28px page headings (implemented in rem). Collection actions are outlined, filters change background without weight changes, and measured-stock changes apply immediately while retaining task filters in the URL. Photo workflows share 4:3 contained viewports with upload controls outside the image area. Setup selection remains tied to the rendered image, excluding letterboxing. Notices explicitly distinguish information, processing, success, warning and error.
+
+Detail pages retain one primary action, previous valid results, a single failure warning and compact staff reporting. Radix Dialog provides task guidance and timestamps, DropdownMenu holds setup/deletion actions, and AlertDialog handles destructive confirmation with pending/error states and focus restoration. Collection columns follow a 20rem minimum usable card width rather than fixed breakpoint counts.
+
+## UI styling and control boundaries
+
+Tailwind v4 provides component layout and typography. `globals.css` contains self-hosted Noto Sans UI and Charter reading font declarations, semantic theme tokens and a minimal layered base; it has no application component selectors. `components.json` configures official shadcn Radix Nova primitives under `src/components/ui/`, installed through the CLI. Generated variants are adapted to regular/bold 400/700 weights and 40px controls (44px for touch). `src/lib/utils.ts` exposes the CLI-selected `cn` class merger. The CLI is a development dependency.
+
+`shelf-ui.tsx` contains domain Badge/Alert wrappers and branding. `shelf-presentation.ts` derives card badge, action and one optional photo-review exception from independent measurement/task/latest-attempt fields. Setup availability controls routing; verification takes action precedence over an active alert; photo failure takes exception precedence. Retained measurements use “Last measured”; reporting never invents a new measurement. Restocking card actions open the existing detail task controls. Details retain measurement/report timestamps and photo-review reasons.
+
+`Providers` wraps TanStack Query and the Radix tooltip provider. Interactive controls remain Client Components; pages/layouts remain Server Components. `PhotoFrame` aligns contained preview/reference images in bounded 4:3 viewports, capped at 24rem desktop height. Calibration canvas dimensions follow the actual contained image, excluding letterboxing. Only ROI coordinates use runtime inline styles. Workflow steps use explicit 32px grid-centered markers and stack below the small-screen breakpoint. Stock Select maps the “all” sentinel to an absent URL stock parameter and preserves task-filter intersections.
+
+Typography roles: Noto Sans is the default sans/heading family, bundled through Fontsource without browser requests to external font services. Charter is the serif reading family for Help paragraphs and instructions and expanded guidance bodies, with 1.75rem line height. Help headings, navigation and dialog titles/actions retain Noto Sans.

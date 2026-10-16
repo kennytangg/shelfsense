@@ -1,4 +1,4 @@
-import { DashboardView } from "@/components/dashboard";
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <DashboardView alerts />;
+  redirect("/?view=attention");
 }

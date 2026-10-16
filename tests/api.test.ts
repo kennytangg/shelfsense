@@ -511,3 +511,61 @@ integration(
     );
   },
 );
+
+integration(
+  "deleting a shelf removes its history, tasks, receipts and photos only",
+  async () => {
+    const id = await create();
+    const other = await create();
+    const shelf = await calibrate(id);
+    const result = await upload(id, "low", "analyses", { ingestion: "true" });
+    assert.equal(result.status, 201);
+    const assets = await db.query(
+      "SELECT id,storage_key FROM image_assets WHERE shelf_id=$1",
+      [id],
+    );
+    assert.ok(assets.length > 1);
+    assert.equal((await request(`/shelves/${id}`, "DELETE")).status, 200);
+    for (const table of [
+      "image_assets",
+      "analyses",
+      "alerts",
+      "ingestion_receipts",
+    ])
+      assert.equal(
+        (await db.query(`SELECT * FROM ${table} WHERE shelf_id=$1`, [id]))
+          .length,
+        0,
+      );
+    assert.equal((await request(`/shelves/${id}`)).status, 404);
+    assert.equal((await request(`/shelves/${id}`, "DELETE")).status, 404);
+    assert.equal((await request(`/images/${shelf.reference.id}`)).status, 404);
+    assert.equal((await request(`/shelves/${other}`)).status, 200);
+    const files = await readdir(media);
+    for (const asset of assets) assert.ok(!files.includes(asset.storage_key));
+  },
+);
+
+integration(
+  "deletion during processing prevents publication and cleans generated photos",
+  async () => {
+    const id = await create();
+    await calibrate(id);
+    const { decode } = await import("../src/server/shelf-analysis");
+    const before = new Set(await readdir(media));
+    const owned = await db.query(
+      "SELECT storage_key FROM image_assets WHERE shelf_id=$1",
+      [id],
+    );
+    await assert.rejects(
+      service.analyze(id, await decode(images.low), {
+        beforePublish: async () => {
+          assert.equal((await request(`/shelves/${id}`, "DELETE")).status, 200);
+        },
+      }),
+      /Shelf zone not found/,
+    );
+    for (const asset of owned) before.delete(asset.storage_key);
+    assert.deepEqual(new Set(await readdir(media)), before);
+  },
+);
