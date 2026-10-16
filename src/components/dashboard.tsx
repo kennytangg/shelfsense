@@ -67,7 +67,7 @@ export function DashboardView({
             ["verification", "Awaiting verification"],
           ].map(([value, label]) => (
             <Link
-              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-primary underline-offset-4 hover:underline aria-[current=page]:bg-accent"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-primary underline-offset-4 hover:underline aria-[current=page]:font-bold aria-[current=page]:underline"
               key={value}
               href={destination(value)}
               aria-current={view === value ? "page" : undefined}

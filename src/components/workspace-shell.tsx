@@ -23,7 +23,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
             ["/help", "Help"],
           ].map(([href, label]) => (
             <Link
-              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-muted-foreground underline-offset-4 hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-foreground"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-muted-foreground underline-offset-4 hover:underline aria-[current=page]:font-bold aria-[current=page]:text-foreground aria-[current=page]:underline"
               key={href}
               href={href}
               aria-current={
