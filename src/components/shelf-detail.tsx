@@ -1,6 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
+import { DeleteShelf } from "./delete-shelf";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import {
@@ -9,35 +9,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-} from "./ui/alert-dialog";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, json, Shelf, date } from "./api-client";
 import { ShelfHeader, ShelfAction } from "./workflow-navigation";
 import { DetailsDialog } from "./details-dialog";
 import { Notice, Status } from "./shelf-ui";
 export function ShelfDetail({ id }: { id: string }) {
-  const menuTrigger = useRef<HTMLButtonElement>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const client = useQueryClient();
-  const router = useRouter();
-  const remove = useMutation({
-    mutationFn: () => api(`/shelves/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      client.removeQueries({ queryKey: ["shelf", id], exact: true });
-      router.replace("/");
-      await client.invalidateQueries();
-    },
-  });
   const query = useQuery({
     queryKey: ["shelf", id],
     queryFn: () => api<Shelf>(`/shelves/${id}`),
@@ -66,14 +45,10 @@ export function ShelfDetail({ id }: { id: string }) {
         <>
           <ShelfHeader title={shelf.name} shelf={shelf}>
             <ShelfAction shelf={shelf} />
+            <DeleteShelf shelf={shelf} redirect />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  ref={menuTrigger}
-                  aria-label="Shelf actions"
-                >
+                <Button variant="ghost" size="icon" aria-label="Shelf actions">
                   <MoreHorizontal className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -81,45 +56,8 @@ export function ShelfDetail({ id }: { id: string }) {
                 <DropdownMenuItem asChild>
                   <Link href={`/shelves/${id}/setup`}>Change setup</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => setConfirmDelete(true)}
-                >
-                  Delete shelf
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-              <AlertDialogContent
-                onCloseAutoFocus={(event) => {
-                  event.preventDefault();
-                  menuTrigger.current?.focus();
-                }}
-              >
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete "{shelf.name}"?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Permanently remove this shelf, its photos, check history and
-                    restocking tasks. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                {remove.isError && (
-                  <Notice error>{remove.error.message}</Notice>
-                )}
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={remove.isPending}>
-                    Cancel
-                  </AlertDialogCancel>
-                  <Button
-                    variant="destructive"
-                    disabled={remove.isPending}
-                    onClick={() => remove.mutate()}
-                  >
-                    {remove.isPending ? "Deleting…" : "Delete shelf"}
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </ShelfHeader>
           <Card
             role="region"
@@ -190,13 +128,15 @@ export function ShelfDetail({ id }: { id: string }) {
               id="restocking"
             >
               <DetailsDialog title="Restocking">
-                Reporting restocked records the staff action. A subsequent valid
-                photo measures stock and verifies recovery. Low or Empty results
-                can still require restocking.
+                Report restocked after refilling the shelf. The stock estimate
+                updates when you check another photo.
               </DetailsDialog>
               {shelf.awaiting_verification ? (
                 <>
-                  <p>Awaiting photo verification</p>
+                  <p>
+                    Restock reported. Check stock with a new photo to update the
+                    result.
+                  </p>
                 </>
               ) : (
                 <>

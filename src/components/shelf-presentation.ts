@@ -9,34 +9,21 @@ export function shelfPresentation(shelf: Shelf) {
       shelf.latest_attempt.outcome !== "Valid" &&
       shelf.latest_attempt.id !== shelf.current?.id)
   );
-  const retained = !!(
-    shelf.active_alert ||
-    shelf.awaiting_verification ||
-    failedPhoto
-  );
-  const badge = !shelf.reference
-    ? "Needs setup"
-    : !measurement
-      ? "Not checked"
-      : retained
-        ? `Last measured: ${measurement}`
-        : measurement;
+  const badge = !shelf.reference ? "Needs setup" : measurement || "Not checked";
   const action = !shelf.reference
     ? "Set up shelf"
     : shelf.awaiting_verification
-      ? "Verify stock"
+      ? "Verify restock"
       : shelf.active_alert
         ? "Restock shelf"
-        : "Check shelf";
-  const href = `/shelves/${shelf.id}${
-    !shelf.reference
-      ? "/setup"
-      : shelf.awaiting_verification
-        ? "/check"
-        : shelf.active_alert
-          ? "#restocking"
-          : "/check"
-  }`;
+        : "Check stock";
+  const href = !shelf.reference
+    ? `/shelves/${shelf.id}/setup`
+    : shelf.awaiting_verification
+      ? `/shelves/${shelf.id}/check`
+      : shelf.active_alert
+        ? `/shelves/${shelf.id}#restocking`
+        : `/shelves/${shelf.id}/check`;
   return {
     badge,
     action,

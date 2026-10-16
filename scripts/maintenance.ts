@@ -41,7 +41,7 @@ export async function seed() {
   try {
     const manifest = await fixtures(fixtureDirectory);
     const storeId = await initialize();
-    for (const [index, e] of manifest.shelves.entries()) {
+    for (const e of manifest.shelves) {
       const id = await transaction(async (c) => {
         await c.query("SELECT pg_advisory_xact_lock(762410)");
         if (
@@ -83,23 +83,13 @@ export async function seed() {
         calibrationSchema.parse({ roi: e.roi }),
         true,
       );
-      const variants =
-        index === 0
-          ? ["full", "low", "empty", "full"]
-          : [["full", "low", "empty"][index % 3]];
-      for (const [step, variant] of variants.entries())
-        await analyze(
-          id,
-          await decode(
-            await readFile(join(fixtureDirectory, e.samples[variant].file)),
-          ),
-          {
-            demo: true,
-            timestamp: new Date(
-              Date.now() - 20 * 60000 * (variants.length - step),
-            ),
-          },
-        );
+      await analyze(
+        id,
+        await decode(
+          await readFile(join(fixtureDirectory, e.samples.low.file)),
+        ),
+        { demo: true, stockOnly: true },
+      );
     }
   } finally {
     await rm(fixtureDirectory, { recursive: true, force: true });

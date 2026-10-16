@@ -38,12 +38,12 @@ test("stock classifications retain their meaning independently of pending tasks"
     const pending = shelfPresentation(
       shelf({ current, awaiting_verification: true }),
     );
-    assert.equal(pending.badge, `Last measured: ${classification}`);
-    assert.equal(pending.action, "Verify stock");
+    assert.equal(pending.badge, classification);
+    assert.equal(pending.action, "Verify restock");
     assert.equal(pending.exception, null);
   }
 });
-test("failed latest photo retains measurement and verification action with one exception", () => {
+test("failed latest photo retains measurement and stock check action with one exception", () => {
   const presentation = shelfPresentation(
     shelf({
       awaiting_verification: true,
@@ -55,19 +55,19 @@ test("failed latest photo retains measurement and verification action with one e
     }),
   );
   assert.deepEqual(presentation, {
-    badge: "Last measured: Empty",
-    action: "Verify stock",
+    badge: "Empty",
+    action: "Verify restock",
     href: "/shelves/test/check",
     exception: "Photo needs review",
   });
 });
-test("restocking action opens existing task controls", () => {
+test("restocking action opens the staff report controls", () => {
   assert.deepEqual(
     shelfPresentation(
       shelf({ active_alert: { id: "alert" } as Shelf["active_alert"] }),
     ),
     {
-      badge: "Last measured: Empty",
+      badge: "Empty",
       action: "Restock shelf",
       href: "/shelves/test#restocking",
       exception: null,
@@ -87,7 +87,7 @@ test("missing current result is never replaced by stale shelf status", () => {
     assert.equal(presentation.badge, "Not checked");
     assert.equal(
       presentation.action,
-      awaiting_verification ? "Verify stock" : "Check shelf",
+      awaiting_verification ? "Verify restock" : "Check stock",
     );
     assert.equal(presentation.exception, "Photo needs review");
   }

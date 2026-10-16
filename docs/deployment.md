@@ -11,4 +11,6 @@ The API uses Node runtime and a 60-second function duration. Current [Vercel lim
 5. Deploy the verified application and enable operator traffic. Point optional Node folder uploaders to the new authenticated URL. Schedule `npm run storage:cleanup -- --apply` in an operator maintenance environment after reviewing its dry run.
 6. For rollback, pause new writes first, back up the new database/media, and account for any post-cutover writes before restoring the old snapshot. Restore the matching database and media snapshot together. Reverting code alone does not reconcile newly written data.
 
+Migration 0002 makes saved mask/overlay evidence optional while preserving measurements and ownership. Back up database/media together before applying it to an existing installation. No application database has been migrated by this change.
+
 Production migration execution belongs in the release workflow, not request handlers or every Vercel function startup. Hosted database/media transfer, preview verification, and production deployment are intentionally pending until provider access and target resources exist.

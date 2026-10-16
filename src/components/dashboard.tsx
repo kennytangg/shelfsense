@@ -1,53 +1,31 @@
 "use client";
 import { MapPin } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api, Shelf } from "./api-client";
 import { Notice, Status } from "./shelf-ui";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card";
-import { Label } from "./ui/label";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "./ui/select";
+import { cn } from "@/lib/utils";
 import { shelfPresentation } from "./shelf-presentation";
-export function DashboardView({
-  status = "",
-  view = "",
-}: {
-  status?: string;
-  view?: string;
-}) {
-  const router = useRouter();
+export function DashboardView({ view = "" }: { view?: string }) {
   const query = useQuery({
     queryKey: ["shelves"],
     queryFn: () => api<Shelf[]>("/shelves"),
   });
   const shelves = query.data || [];
   const visible = shelves
-    .filter(
-      (shelf) =>
-        (!status || shelf.status === status) &&
-        (view === "restocking"
-          ? !!shelf.active_alert
-          : view === "verification"
-            ? shelf.awaiting_verification
-            : view === "attention"
-              ? shelf.active_alert || shelf.awaiting_verification
-              : true),
+    .filter((shelf) =>
+      view === "restocking"
+        ? !!shelf.active_alert
+        : view === "verification"
+          ? shelf.awaiting_verification
+          : view === "attention"
+            ? shelf.active_alert || shelf.awaiting_verification
+            : true,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
-  const destination = (task: string, stock = status) => {
-    const params = new URLSearchParams();
-    if (task) params.set("view", task);
-    if (stock) params.set("status", stock);
-    return `/?${params}`;
-  };
+  const destination = (task: string) => (task ? `/?view=${task}` : "/");
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -64,7 +42,7 @@ export function DashboardView({
           {[
             ["", "All"],
             ["restocking", "Needs restocking"],
-            ["verification", "Awaiting verification"],
+            ["verification", "Restock reported"],
           ].map(([value, label]) => (
             <Link
               className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-primary underline-offset-4 hover:underline aria-[current=page]:font-bold aria-[current=page]:underline"
@@ -76,37 +54,7 @@ export function DashboardView({
             </Link>
           ))}
         </nav>
-        <div className="flex flex-wrap items-center gap-3">
-          <Label htmlFor="shelf-status">Measured stock</Label>
-          <Select
-            value={status || "all"}
-            onValueChange={(value) =>
-              router.push(destination(view, value === "all" ? "" : value))
-            }
-          >
-            <SelectTrigger
-              id="shelf-status"
-              className="w-44 bg-card text-sm leading-6"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value="all">All stock levels</SelectItem>
-              {["Full", "Low", "Empty"].map((value) => (
-                <SelectItem key={value} value={value}>
-                  {value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
-      {status && !query.isPending && (
-        <p className="text-sm leading-5 text-muted-foreground">
-          {visible.length} shelves · {status} stock ·{" "}
-          <Link href={destination(view, "")}>Clear stock filter</Link>
-        </p>
-      )}
       {query.isPending && (
         <Notice variant="processing">Loading shelves…</Notice>
       )}
@@ -124,14 +72,13 @@ export function DashboardView({
             <>
               No shelves match{" "}
               {view === "verification"
-                ? "Awaiting verification"
+                ? "Restock reported"
                 : view === "restocking"
                   ? "Needs restocking"
                   : view === "attention"
                     ? "Needs attention"
                     : "All tasks"}
-              {status ? ` · ${status} stock` : ""}.{" "}
-              <Link href="/">Show all shelves</Link>
+              . <Link href="/">Show all shelves</Link>
             </>
           ) : (
             <>
@@ -152,12 +99,21 @@ export function DashboardView({
               key={shelf.id}
               role="article"
               aria-label={shelf.name}
-              className="simple-card min-w-0 gap-4 shadow-none"
+              className={cn(
+                "simple-card min-w-0 gap-4 shadow-none",
+                shelf.awaiting_verification
+                  ? "border-primary/25 bg-secondary/40"
+                  : presentation.badge === "Empty"
+                    ? "border-destructive/25 bg-danger-background/30"
+                    : presentation.badge === "Low"
+                      ? "border-warning/25 bg-warning-background/30"
+                      : "",
+              )}
             >
               <CardHeader className="gap-2">
                 <h2 className="text-lg font-bold leading-6 wrap-anywhere">
                   <Link
-                    className="text-primary hover:underline"
+                    className="text-foreground underline-offset-4 hover:underline"
                     href={`/shelves/${shelf.id}`}
                   >
                     {shelf.name}
@@ -175,15 +131,33 @@ export function DashboardView({
                 </p>
                 <Status status={presentation.badge} />
               </CardHeader>
-              {presentation.exception && (
-                <CardContent>
+              <CardContent className="space-y-2 text-muted-foreground">
+                <p className="text-sm leading-5">
+                  {shelf.awaiting_verification
+                    ? "Restock reported · Confirm the refill with a new photo."
+                    : presentation.badge === "Empty"
+                      ? "Shelf is empty. Refill it as soon as possible."
+                      : presentation.badge === "Low"
+                        ? "Stock is running low. Top up this shelf."
+                        : presentation.badge === "Full"
+                          ? "Stock looks sufficient. No restocking needed."
+                          : "Set up this shelf and upload a photo to check stock."}
+                </p>
+                {presentation.exception && (
                   <p className="text-sm leading-5 text-warning">
                     {presentation.exception}
                   </p>
-                </CardContent>
-              )}
-              <CardFooter className="mt-auto justify-end border-0 bg-transparent pt-0">
-                <Button asChild variant="outline">
+                )}
+              </CardContent>
+              <CardFooter className="mt-auto flex-wrap justify-end gap-2 border-0 bg-transparent pt-0">
+                <Button
+                  asChild
+                  variant={
+                    shelf.active_alert || shelf.awaiting_verification
+                      ? "default"
+                      : "ghost"
+                  }
+                >
                   <Link href={presentation.href}>
                     {presentation.action}
                     <span aria-hidden="true">→</span>

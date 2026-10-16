@@ -10,7 +10,7 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
 import { cn } from "@/lib/utils";
 export function Status({ status }: { status: string }) {
-  const value = status.replace("Last measured: ", "");
+  const value = status;
   const Icon =
     value === "Full" || value === "Matches reference"
       ? CheckCircle2

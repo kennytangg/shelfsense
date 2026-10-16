@@ -12,7 +12,6 @@ import { api, json, Shelf, Analysis, uploadImage } from "./api-client";
 import { Notice } from "./shelf-ui";
 import { FilePicker } from "./image-upload";
 import { ShelfHeader, WorkflowProgress } from "./workflow-navigation";
-import { DetailsDialog } from "./details-dialog";
 import { CalibrationForm } from "./shelf-calibration";
 export function NewShelf() {
   const router = useRouter();
@@ -28,7 +27,7 @@ export function NewShelf() {
   });
   return (
     <>
-      <ShelfHeader title="Add shelf" />
+      <ShelfHeader title="Add shelf" breadcrumbLabel="New shelf" />
       <WorkflowProgress stage="add" />
       <form
         className="mt-6 flex max-w-[44rem] flex-col gap-6"
@@ -88,13 +87,8 @@ export function ShelfWorkflow({
   return (
     <>
       <ShelfHeader
-        title={
-          mode === "setup"
-            ? "Set up shelf"
-            : query.data?.awaiting_verification
-              ? "Verify restocking"
-              : "Check shelf"
-        }
+        title={mode === "setup" ? "Set up shelf" : "Check stock"}
+        breadcrumbLabel={mode === "setup" ? "Setup" : "Stock check"}
         shelf={query.data}
       />
       {query.isPending && <Notice variant="processing">Loading shelf…</Notice>}
@@ -141,16 +135,11 @@ function CheckForm({ shelf }: { shelf: Shelf }) {
   });
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 text-base leading-6">
-        Match the saved reference framing.
-        <DetailsDialog title="Photo guidance">
-          Use the same camera position, framing and lighting as the saved
-          reference. Show the entire shelf area.
-        </DetailsDialog>
-      </div>
-      {shelf.awaiting_verification && (
-        <Notice>Restocking reported. Add a photo to verify stock.</Notice>
-      )}
+      <p className="text-base leading-6">
+        Upload a current photo to update the stock estimate. Use the same camera
+        position and lighting as the empty shelf photo below, with the whole
+        monitored area visible.
+      </p>
       <div className="check-layout mt-4 grid grid-cols-1 items-start gap-6 md:grid-cols-2">
         <Card
           role="region"
@@ -167,36 +156,26 @@ function CheckForm({ shelf }: { shelf: Shelf }) {
           />
           {mutation.isError && <Notice error>{mutation.error.message}</Notice>}
           {mutation.isPending && (
-            <Notice variant="processing">
-              {shelf.awaiting_verification
-                ? "Verifying restocking…"
-                : "Checking stock…"}
-            </Notice>
+            <Notice variant="processing">Checking stock…</Notice>
           )}
           <Button
             disabled={!file || mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending
-              ? shelf.awaiting_verification
-                ? "Verifying restocking…"
-                : "Checking stock…"
-              : shelf.awaiting_verification
-                ? "Verify restocking"
-                : "Check stock"}
+            {mutation.isPending ? "Checking stock…" : "Check stock"}
           </Button>
         </Card>
         <Card
           role="region"
           className="workflow-panel min-w-0 gap-4 p-4 text-base leading-6 shadow-none"
         >
-          <h2 className="text-lg font-bold leading-6">Saved reference</h2>
+          <h2 className="text-lg font-bold leading-6">Empty shelf photo</h2>
 
           <PhotoFrame>
             <img
               className="h-full w-full object-contain"
               src={shelf.reference!.url}
-              alt="Saved reference for matching the photo framing"
+              alt="Empty shelf baseline; take the current photo from this position"
             />
           </PhotoFrame>
         </Card>

@@ -564,18 +564,26 @@ export async function analyze(
         options.demo ?? false,
         keys,
       ),
-      overlay = result.overlay
-        ? await writeAsset(
-            id,
-            result.overlay,
-            "Overlay",
-            options.demo ?? false,
-            keys,
-          )
-        : null,
-      mask = result.mask
-        ? await writeAsset(id, result.mask, "Mask", options.demo ?? false, keys)
-        : null;
+      overlay =
+        !options.stockOnly && result.overlay
+          ? await writeAsset(
+              id,
+              result.overlay,
+              "Overlay",
+              options.demo ?? false,
+              keys,
+            )
+          : null,
+      mask =
+        !options.stockOnly && result.mask
+          ? await writeAsset(
+              id,
+              result.mask,
+              "Mask",
+              options.demo ?? false,
+              keys,
+            )
+          : null;
     await options.beforePublish?.();
     const published = await transaction(async (c) => {
       const locked = await getShelf(id, c, true);

@@ -2,7 +2,7 @@
 
 ## Regression coverage
 
-The application uses one initial schema in `migrations/0001.sql`. API tests exercise fresh and repeated migrations, checksum changes, unsupported migration histories, and rejection of schemas without recorded history. Tests use disposable schemas in a separate `TEST_DATABASE_URL` and temporary media.
+The application uses `migrations/0001.sql` plus `0002.sql`, which allows valid stock checks without saved masks/overlays. API tests exercise fresh and repeated migrations, checksum changes, unsupported migration histories, and rejection of schemas without recorded history. Tests use disposable schemas in a separate `TEST_DATABASE_URL` and temporary media.
 
 The detector matches expected stock and placement outputs for five frozen cases in `tests/fixtures/detector-expected.json`. Tests also cover threshold equality, invalid settings, decoding failures, byte/pixel/dimension/format limits, quality rejection, and EXIF orientation. Trusted normalized references retain decoded-pixel checks while allowing PNGs larger than the original JPEG upload limit.
 
@@ -11,6 +11,8 @@ API regressions cover the complete restocking lifecycle, retained findings on fa
 ## Required checks
 
 Run `npm run typecheck`, `npm run format:check`, `npm test`, and `npm run build`. Stop development Next.js before building. Run `npm run test:browser` against the production build with a separate test database and Chromium. The browser workflow covers empty installation, creation/setup/check/result pages, keyboard area selection, invalid-photo retention, alerts, restocking, subsequent-photo verification, real uploads, reload and Back/Forward, URL filtering, mobile layout, and folder uploader stable-file/restart deduplication.
+
+Breadcrumb checks cover New shelf, shelf → Setup, and shelf → Stock check, with one current-page marker, a link back to shelf details, and updates on Back/Forward. Workflow labels are independent of headings and shelf names.
 
 ## Local verification result
 
@@ -63,3 +65,35 @@ Actual Chromium tab zoom passed at 125% and 200% on Shelves, Add shelf, setup, v
 Skipped separately: hosted provider verification (no hosted credentials), physical-device/screen-reader checks, and browser-menu invocation itself (native tab zoom was exercised through the browser API). These do not change the existing hosted deployment limitations above.
 
 Supplementary popup scan: a full-page axe scan with the Radix Select open flags `aria-hidden-focus` on background controls hidden by Radix. This is not counted as a clean full-page open-popup scan. Tab testing confirms focus stays in the open listbox, and installed Radix source uses a trapped FocusScope plus outside-focus/pointer guards (`node_modules/@radix-ui/react-select/dist/index.mjs`). The popup content is scanned separately; no accessibility rule is disabled in the required browser suite. Dialog-open scans, tooltip collision bounds, badge content fit and popup-focused scans are recorded in `/tmp/shelfsense-popups.log` with screenshots `/tmp/shelfsense-ui-tooltip-{width}.png` and `/tmp/shelfsense-ui-select-{width}.png`. Screen-reader validation of this primitive remains a manual check.
+
+Restoration check (2026-10-16): the broad stateless MVP rewrite was undone. The original shelf/location/setup/check/restocking/verification screens and database-backed startup are restored; only the earlier photo-storage/demo reduction remains. Typecheck, formatting, 29 Node regressions, 2 launcher tests and production build passed. Browser checks were not rerun for this restoration. Application database/media were not changed.
+
+## Stock workflow wording
+
+The ShelfSense section of `requirements.pdf` asks for image input, Full/Low/Empty results, staff alerts and a simple dashboard. Photo uploads consistently use **Check stock**, including after staff report a refill. Setup supplies the current detector's empty-shelf baseline once per camera position. Restock reporting records staff work; a new valid photo updates the measurement. The photo page shows one camera-position instruction and no separate restocking progress or verification prompt. Dashboard filters label reported refills **Restock reported**.
+
+Validation for this wording change: typecheck, format check, production build, 16 Node tests and 2 Jest tests passed. The plain test run skipped 13 database tests. Separate attempts with `shelfsense_simplification_test` could not complete API or browser verification because the existing migration runner references missing `migrations/0002.sql`. No migration files or application data were changed for this UI work.
+
+## Near-MVP workflow simplification (2026-10-16)
+
+Removed the measured-stock dropdown and “Last measured” badge prefix. The shelf list has All, Needs restocking and Restock reported; photo classifications remain Full/Low/Empty as required by the PDF. Help covers the complete setup/check/refill/verification workflow and failed-photo recovery. The simple ERD and table-retention rationale are in `docs/data-model.md`.
+
+Verified with Node 24.14.0: typecheck, format:check, production build, and the production browser workflow against `shelfsense_simplification_test` with disposable schemas/media. Browser regressions now check task tabs, plain photo-result badges, absence of the stock selector, keyboard/history navigation and mobile task links. The initial database run exposed the missing `0002.sql`; the added forward migration permits valid results without generated overlays/masks while preserving historical assets and ownership. The application database was not migrated.
+
+Final database-backed `npm test`: 29 Node regressions and 2 Jest launcher tests passed, with no skipped tests. A sandbox-blocked PostgreSQL connection was rerun successfully with approved access to the separate local test database.
+
+## Visible deletion and distinct shelf cards (2026-10-16)
+
+Cards and shelf details now expose a trash icon with a labelled Delete shelf button. Shared confirmation retains pending/error handling and focus restoration. Cancellation on details and confirmed deletion from the list passed in the production browser workflow using disposable test data. Real saved shelves were not deleted.
+
+Full, Low and Empty cards have green, amber and red top borders plus different guidance. Active tasks link to Restock shelf; reported refills link to Verify restock. Browser checks verify each result's border, message and action, alongside mobile layout and accessibility checks. Visually inspected the 390px shelf-list screenshot. Help documents the buttons and states.
+
+Passed: typecheck, format:check, production build, all 29 Node tests and 2 Jest tests against the separate test database, production browser smoke and git diff --check. No skipped checks.
+
+### Follow-up: deletion belongs inside the shelf page
+
+Removed Delete shelf from every dashboard card. Open the shelf name to reach the visible Delete shelf button on the detail page. Help and architecture guidance now reflect this placement. Browser checks assert no delete button appears on cards and exercise cancellation and confirmation inside the shelf page.
+
+## Simplified card hierarchy
+
+Cards use a thin neutral border, modest corners, more internal space and an unfilled footer. Shelf names lead in dark bold text; supporting copy is muted. Low stock, empty shelves and reported restocks receive subtle status tints, while routine cards stay white. Status labels and icons preserve meaning without relying on colour. Primary buttons remain reserved for restocking and verification tasks; routine card actions use a quieter text treatment.

@@ -14,9 +14,15 @@ export async function migrate() {
       throw Error(
         "Existing schema has no migration history; use a fresh database.",
       );
-    if (journal.rows.some((row) => row.version !== "0001"))
+    const versions = ["0001", "0002"];
+    if (journal.rows.some((row) => !versions.includes(row.version)))
       throw Error("Unsupported migration history; use a fresh database.");
-    for (const version of ["0001"]) {
+    if (
+      journal.rows.some((row) => row.version === "0002") &&
+      !journal.rows.some((row) => row.version === "0001")
+    )
+      throw Error("Unsupported migration history; use a fresh database.");
+    for (const version of versions) {
       const text = await readFile(`migrations/${version}.sql`, "utf8"),
         checksum = createHash("sha256").update(text).digest("hex");
       const applied = journal.rows.find((r) => r.version === version);

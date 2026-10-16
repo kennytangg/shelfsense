@@ -93,6 +93,13 @@ async function main() {
       .getByRole("link", { name: "Add shelf", exact: true })
       .first()
       .click();
+    const breadcrumbs = page.getByRole("navigation", {
+      name: "Breadcrumb",
+      exact: true,
+    });
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "New shelf",
+    );
     await expect(
       page
         .getByRole("navigation", { name: "Shelf progress" })
@@ -110,15 +117,17 @@ async function main() {
     await expect(
       progress.getByText("Check stock", { exact: true }),
     ).toBeVisible();
-    const breadcrumbs = page.getByRole("navigation", {
-      name: "Breadcrumb",
-      exact: true,
-    });
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "Setup",
+    );
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Set up shelf",
     );
     await breadcrumbs.getByRole("link", { name: "Test cereal shelf" }).click();
     await expect(page).toHaveURL(`${base}/shelves/${id}`);
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "Test cereal shelf",
+    );
     await page.goto(`${base}/shelves/${id}/setup`);
     await expect(
       page.getByRole("button", { name: "Save setup", exact: true }),
@@ -190,6 +199,20 @@ async function main() {
     for (let n = 0; n < 10; n++) await page.keyboard.press("ArrowDown");
     await page.getByRole("button", { name: "Save setup", exact: true }).click();
     await expect(page).toHaveURL(/\/check$/);
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "Stock check",
+    );
+    await expect(
+      breadcrumbs.getByRole("link", { name: "Test cereal shelf" }),
+    ).toHaveAttribute("href", `/shelves/${id}`);
+    await page.goBack();
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "Setup",
+    );
+    await page.goForward();
+    await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText(
+      "Stock check",
+    );
     await page
       .getByRole("navigation", { name: "Breadcrumb", exact: true })
       .getByRole("link", { name: "Shelves", exact: true })
@@ -201,10 +224,6 @@ async function main() {
       .getByRole("link", { name: "Shelves", exact: true })
       .click();
     await expect(page).toHaveURL(base + "/");
-    async function selectStock(value: string) {
-      await page.getByRole("combobox", { name: "Measured stock" }).click();
-      await page.getByRole("option", { name: value, exact: true }).click();
-    }
     async function assertComparison() {
       await expect(page.locator(".check-layout .photo-frame")).toHaveCount(2);
       const left = await page
@@ -221,14 +240,9 @@ async function main() {
     }
     await page.goto(`${base}/shelves/${id}/check`);
     await assertComparison();
-    const help = page.getByRole("button", {
-      name: "Photo guidance",
-      exact: true,
-    });
-    await help.click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(help).toBeFocused();
+    await expect(
+      page.getByText("Upload a current photo to update", { exact: false }),
+    ).toBeVisible();
     await page.getByLabel("Shelf photo").setInputFiles({
       name: "invalid.txt",
       mimeType: "text/plain",
@@ -282,12 +296,10 @@ async function main() {
         await gate;
         await route.continue();
       });
-      await page
-        .getByRole("button", { name: /^(Check stock|Verify restocking)$/ })
-        .click();
+      await page.getByRole("button", { name: /^Check stock$/ }).click();
       await expect(
         page.getByRole("button", {
-          name: /^(Checking stock…|Verifying restocking…)$/,
+          name: /^Checking stock…$/,
         }),
       ).toBeDisabled();
       await expect(page.locator("[role=status]")).toBeVisible();
@@ -297,14 +309,49 @@ async function main() {
       await expect(page.locator("[data-slot=badge]")).toHaveText(status, {
         timeout: 30000,
       });
+      await page.goto(base);
+      const card = page.getByRole("article");
+      await expect(card.locator("[data-slot=badge]")).toHaveText(status);
+      await expect(card).toHaveClass(
+        new RegExp(
+          status === "Full"
+            ? "border-t-success"
+            : status === "Low"
+              ? "border-t-warning"
+              : "border-t-destructive",
+        ),
+      );
+      await expect(
+        card.getByText(
+          status === "Full"
+            ? "Stock looks sufficient. No restocking needed."
+            : status === "Low"
+              ? "Stock is running low. Top up this shelf."
+              : "Shelf is empty. Refill it as soon as possible.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        card.getByRole("button", { name: "Delete shelf", exact: true }),
+      ).toHaveCount(0);
+      const action = card.getByRole("link", {
+        name: status === "Full" ? "Check stock" : "Restock shelf",
+        exact: true,
+      });
+      await expect(action).toBeVisible();
+      if (status !== "Full") {
+        await action.click();
+        await expect(
+          page.getByRole("button", { name: "Report restocked", exact: true }),
+        ).toBeVisible();
+      }
+      await page.goto(base + "/shelves/" + id);
     }
     await page.goto(`${base}/shelves/${id}/check`);
     await page
       .getByLabel("Shelf photo")
       .setInputFiles("tests/fixtures/shelves/mismatched.png");
-    await page
-      .getByRole("button", { name: /^(Check stock|Verify restocking)$/ })
-      .click();
+    await page.getByRole("button", { name: /^Check stock$/ }).click();
     await expect(page).toHaveURL(`${base}/shelves/${id}`);
     await expect(
       page.getByRole("heading", { name: "No valid result" }),
@@ -315,9 +362,7 @@ async function main() {
     await page
       .getByLabel("Shelf photo")
       .setInputFiles("tests/fixtures/shelves/mismatched.png");
-    await page
-      .getByRole("button", { name: /^(Check stock|Verify restocking)$/ })
-      .click();
+    await page.getByRole("button", { name: /^Check stock$/ }).click();
     await expect(page).toHaveURL(base + "/shelves/" + id);
     await expect(page.locator("[data-slot=badge]")).toHaveText("Low");
     await expect(
@@ -331,45 +376,47 @@ async function main() {
       .getByRole("button", { name: "Report restocked", exact: true })
       .click();
     await expect(
-      page.getByText("Awaiting photo verification", { exact: false }),
+      page.getByText(
+        "Restock reported. Check stock with a new photo to update the result.",
+        { exact: false },
+      ),
     ).toBeVisible();
     await expect(page.locator("[data-slot=badge]")).toHaveText("Low");
     await page.goto(base + "/?view=verification");
     await expect(page.locator("[role=article]")).toHaveCount(1);
     await expect(
-      page.getByRole("link", { name: "Verify stock", exact: true }),
+      page.getByRole("link", { name: "Verify restock", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText("Awaiting photo verification", { exact: true }),
+      page.getByText(
+        "Restock reported. Check stock with a new photo to update the result.",
+        { exact: true },
+      ),
     ).toHaveCount(0);
     await expect(
       page.getByText("Photo needs review", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("article").locator("[data-slot=badge]"),
-    ).toHaveText("Last measured: Low");
-    await selectStock("Full");
-    await expect(page).toHaveURL(base + "/?view=verification&status=Full");
+    ).toHaveText("Low");
     await expect(
-      page.getByText("No shelves match", { exact: false }),
-    ).toContainText("Awaiting verification · Full stock");
-    await page.getByRole("link", { name: "Clear stock filter" }).click();
-    await expect(page).toHaveURL(base + "/?view=verification");
+      page.getByRole("combobox", { name: "Measured stock" }),
+    ).toHaveCount(0);
     await page.reload();
     await expect(page.locator("[role=article]")).toHaveCount(1);
-    await page.getByRole("link", { name: "Verify stock", exact: true }).click();
+    await page
+      .getByRole("link", { name: "Verify restock", exact: true })
+      .click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "Verify restocking",
+      "Check stock",
     );
+    await expect(page.locator(".workflow-progress")).toHaveCount(0);
     await expect(
-      page.locator(".workflow-progress .progress-complete"),
-    ).toHaveCount(2);
-    await expect(page.locator("[data-slot=alert]")).toContainText(
-      "Restocking reported. Add a photo to verify stock.",
-    );
+      page.getByText("Match the saved reference framing.", { exact: true }),
+    ).toHaveCount(0);
     await expect(page.locator(".notice.success, [role=status]")).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Verify restocking", exact: true }),
+      page.getByRole("button", { name: "Check stock", exact: true }),
     ).toBeDisabled();
     await page.goto(base + "/alerts");
     await expect(page.locator("[role=article]")).toHaveCount(1);
@@ -381,22 +428,23 @@ async function main() {
     ).toBeVisible();
     await check("reference", "Empty");
     await page.goto(base);
-    await selectStock("Empty");
-    await expect(page).toHaveURL(base + "/?status=Empty");
+    await page
+      .getByRole("link", { name: "Needs restocking", exact: true })
+      .click();
+    await expect(page).toHaveURL(base + "/?view=restocking");
     await page.reload();
-    await expect(page.locator("[role=article]")).toHaveCount(1);
-    await selectStock("Full");
+    await expect(page.getByRole("article")).toHaveCount(1);
     await expect(
-      page.getByRole("link", { name: "Show all shelves" }),
+      page.getByRole("article").locator("[data-slot=badge]"),
+    ).toHaveText("Empty");
+    await page
+      .getByRole("link", { name: "Restock reported", exact: true })
+      .click();
+    await expect(
+      page.getByText("No shelves match", { exact: false }),
     ).toBeVisible();
     await page.goBack();
-    await expect(page.getByLabel("Measured stock", { exact: true })).toHaveText(
-      "Empty",
-    );
-    await page.goForward();
-    await expect(page.getByLabel("Measured stock", { exact: true })).toHaveText(
-      "Full",
-    );
+    await expect(page.getByRole("article")).toHaveCount(1);
     await page.goto(base + "/shelves/" + id + "?setup=1");
     await expect(page).toHaveURL(/\/setup$/);
     await page.goto(base + "/help");
@@ -498,14 +546,18 @@ async function main() {
         await expect(heading).toHaveCSS("font-size", "18px");
       }
       for (const filter of await layoutPage.locator(".task-filters a").all()) {
+        const weight =
+          (await filter.getAttribute("aria-current")) === "page"
+            ? "700"
+            : "400";
         await expect(filter).toHaveCSS("font-size", "14px");
-        await expect(filter).toHaveCSS("font-weight", "400");
+        await expect(filter).toHaveCSS("font-weight", weight);
         await filter.focus();
         await expect(filter).toHaveCSS("outline-style", "solid");
-        await expect(filter).toHaveCSS("font-weight", "400");
+        await expect(filter).toHaveCSS("font-weight", weight);
       }
       for (const link of await layoutPage
-        .locator("header nav a, .task-filters a")
+        .locator('nav[aria-label="Main navigation"] a, .task-filters a')
         .all()) {
         await layoutPage.mouse.move(0, 0);
         const background = await link.evaluate(
@@ -550,36 +602,9 @@ async function main() {
           expect(box.width).toBeGreaterThanOrEqual(Math.min(320, width - 64));
         for (const box of row)
           expect(Math.abs(box.width - boxes[0].width)).toBeLessThan(2);
-        const stock = layoutPage.getByRole("combobox", {
-          name: "Measured stock",
-        });
-        const textFit = await stock.evaluate((el) =>
-          [...el.querySelectorAll("span")].every(
-            (span) => span.scrollWidth <= span.clientWidth + 1,
-          ),
-        );
-        expect(textFit).toBe(true);
-        await stock.focus();
-        await layoutPage.keyboard.press("ArrowDown");
         await expect(
-          layoutPage.getByRole("option", {
-            name: "All stock levels",
-            exact: true,
-          }),
+          layoutPage.getByRole("navigation", { name: "Shelf tasks" }),
         ).toBeVisible();
-        const popup = (await layoutPage.getByRole("listbox").boundingBox())!;
-        expect(popup.x).toBeGreaterThanOrEqual(0);
-        expect(popup.x + popup.width).toBeLessThanOrEqual(width + 1);
-        await layoutPage.keyboard.press("Escape");
-        await expect(stock).toBeFocused();
-        await layoutPage.keyboard.press("Space");
-        await expect(layoutPage.getByRole("listbox")).toBeVisible();
-        await layoutPage.keyboard.press("l");
-        await expect(
-          layoutPage.getByRole("option", { name: "Low", exact: true }),
-        ).toBeFocused();
-        await layoutPage.keyboard.press("Enter");
-        await expect(stock).toHaveText("Low");
         await verifyTypographyAndReadingWidth();
         await expect(layoutPage.locator(".alert-evidence")).toHaveCount(0);
         if ([1440, 1280, 768, 390, 360].includes(width)) {
@@ -632,7 +657,10 @@ async function main() {
             fullPage: true,
           });
           await layoutPage
-            .getByRole("button", { name: "Check details", exact: true })
+            .getByRole("button", {
+              name: "Check details",
+              exact: true,
+            })
             .click();
           await layoutPage.screenshot({
             path: `/tmp/shelfsense-ui-dialog-${width}.png`,
@@ -746,25 +774,19 @@ async function main() {
     });
     const touchPage = await touchContext.newPage();
     await touchPage.goto(base + "/shelves/" + id + "/check");
-    await touchPage
-      .getByRole("button", { name: "Photo guidance", exact: true })
-      .tap();
-    await expect(touchPage.getByRole("dialog")).toBeVisible();
-    await touchPage
-      .getByRole("button", { name: "Close", exact: true })
-      .last()
-      .tap();
-    await expect(touchPage.getByRole("dialog")).not.toBeVisible();
+    await expect(
+      touchPage.getByText("Upload a current photo to update", { exact: false }),
+    ).toBeVisible();
     await touchPage.goto(base);
-    await touchPage.getByRole("combobox", { name: "Measured stock" }).tap();
-    await touchPage.getByRole("option", { name: "Low", exact: true }).tap();
-    await expect(touchPage).toHaveURL(base + "/?status=Low");
+    await touchPage
+      .getByRole("link", { name: "Needs restocking", exact: true })
+      .tap();
+    await expect(touchPage).toHaveURL(base + "/?view=restocking");
     await touchContext.close();
     await layoutContext.close();
     await page.goto(`${base}/shelves/${id}`);
-    await page.getByLabel("Shelf actions").click();
     await page
-      .getByRole("menuitem", { name: "Delete shelf", exact: true })
+      .getByRole("button", { name: "Delete shelf", exact: true })
       .click();
     await expect(page.getByRole("alertdialog")).toBeVisible();
     await page.screenshot({
@@ -773,11 +795,12 @@ async function main() {
     });
     await page.keyboard.press("Escape");
     await expect(page.getByRole("alertdialog")).not.toBeVisible();
-    await expect(page.getByLabel("Shelf actions")).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Delete shelf", exact: true }),
+    ).toBeFocused();
     await expect(page).toHaveURL(`${base}/shelves/${id}`);
-    await page.getByLabel("Shelf actions").click();
     await page
-      .getByRole("menuitem", { name: "Delete shelf", exact: true })
+      .getByRole("button", { name: "Delete shelf", exact: true })
       .click();
     await page
       .getByRole("alertdialog")

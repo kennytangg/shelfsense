@@ -145,7 +145,7 @@ integration(
     assert.deepEqual(await db.query("SELECT * FROM stores"), before);
     assert.equal(
       (await db.query("SELECT * FROM shelfsense_migrations")).length,
-      1,
+      2,
     );
   },
 );
@@ -266,6 +266,10 @@ integration(
     assert.ok(dash.placement_review > 0);
     const stockOnly = await upload(id, "misplaced");
     assert.equal(stockOnly.data.placement_result, null);
+    assert.equal(stockOnly.data.overlay, null);
+    assert.equal(stockOnly.data.mask, null);
+    assert.ok(actual.data.overlay);
+    assert.ok(actual.data.mask);
     assert.ok((await detail(id)).placement_reference);
     assert.equal(
       (await request(`/shelves/${id}/placement`, "DELETE")).status,
@@ -398,7 +402,10 @@ integration(
   "migration rejects missing history and changed checksums without losing records",
   async () => {
     const before = await db.query("SELECT * FROM stores");
-    const [entry] = await db.query("SELECT * FROM shelfsense_migrations");
+    const entries = await db.query(
+      "SELECT * FROM shelfsense_migrations ORDER BY version",
+    );
+    const entry = entries[0];
     try {
       await db.query("DELETE FROM shelfsense_migrations");
       await assert.rejects(migration.migrate(), /no migration history/);
@@ -411,7 +418,7 @@ integration(
         migration.migrate(),
         /Applied migration 0001 changed/,
       );
-      await db.query("UPDATE shelfsense_migrations SET version='0002'");
+      await db.query("UPDATE shelfsense_migrations SET version='9999'");
       await assert.rejects(
         migration.migrate(),
         /Unsupported migration history/,
@@ -419,10 +426,11 @@ integration(
       assert.deepEqual(await db.query("SELECT * FROM stores"), before);
     } finally {
       await db.query("DELETE FROM shelfsense_migrations");
-      await db.query(
-        "INSERT INTO shelfsense_migrations(version,checksum) VALUES($1,$2)",
-        [entry.version, entry.checksum],
-      );
+      for (const entry of entries)
+        await db.query(
+          "INSERT INTO shelfsense_migrations(version,checksum) VALUES($1,$2)",
+          [entry.version, entry.checksum],
+        );
     }
   },
 );

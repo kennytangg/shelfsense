@@ -45,10 +45,12 @@ export function Breadcrumbs({
 }
 export function ShelfHeader({
   title,
+  breadcrumbLabel,
   shelf,
   children,
 }: {
   title: string;
+  breadcrumbLabel?: string;
   shelf?: Shelf;
   children?: React.ReactNode;
 }) {
@@ -57,10 +59,10 @@ export function ShelfHeader({
       <div className="min-w-0 flex-1">
         <Breadcrumbs
           items={[
-            ...(shelf && title !== shelf.name
+            ...(shelf && breadcrumbLabel
               ? [{ label: shelf.name, href: `/shelves/${shelf.id}` }]
               : []),
-            ...(shelf && title !== shelf.name ? [] : [{ label: title }]),
+            { label: breadcrumbLabel ?? shelf?.name ?? title },
           ]}
         />
         <h1 className="text-[1.75rem] leading-tight tracking-tight wrap-anywhere">
@@ -94,9 +96,7 @@ export function ShelfAction({
         href={`/shelves/${shelf.id}/${shelf.reference ? "check" : "setup"}`}
       >
         <Camera className="size-4 shrink-0" aria-hidden="true" />
-        {shelf.reference && !shelf.awaiting_verification
-          ? "Check shelf"
-          : presentation.action}
+        {presentation.action}
       </Link>
     </Button>
   );
@@ -104,36 +104,19 @@ export function ShelfAction({
 
 export function WorkflowProgress({
   stage,
-  shelf,
 }: {
   stage: "add" | "setup" | "check";
   shelf?: Shelf;
 }) {
-  const restocking =
-    stage === "check" &&
-    !!(shelf?.active_alert || shelf?.awaiting_verification);
-  const current = restocking
-    ? shelf?.awaiting_verification
-      ? 2
-      : 0
-    : stage === "add"
-      ? 0
-      : stage === "setup"
-        ? 1
-        : shelf?.reference
-          ? 2
-          : 1;
-  if (stage === "check" && shelf?.current && !restocking) return null;
+  if (stage === "check") return null;
+  const current = stage === "add" ? 0 : 1;
   return (
     <nav
       className="workflow-progress my-6 text-sm leading-5"
-      aria-label={restocking ? "Restocking progress" : "Shelf progress"}
+      aria-label="Shelf progress"
     >
       <ol className="grid gap-3 sm:grid-cols-3">
-        {(restocking
-          ? ["Needs restocking", "Restock reported", "Verify restocking"]
-          : ["Add shelf", "Set up shelf", "Check stock"]
-        ).map((label, index) => (
+        {["Add shelf", "Set up shelf", "Check stock"].map((label, index) => (
           <li
             key={label}
             className={

@@ -2,9 +2,9 @@ import { DashboardView } from "@/components/dashboard";
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; view?: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
-  const { status, view } = await searchParams;
+  const { view } = await searchParams;
   return (
     <DashboardView
       view={
@@ -12,7 +12,6 @@ export default async function Page({
           ? view
           : ""
       }
-      status={["Full", "Low", "Empty"].includes(status || "") ? status : ""}
     />
   );
 }

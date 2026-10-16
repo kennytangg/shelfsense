@@ -14,11 +14,11 @@
 
 Thresholds, processing width, morphology size and minimum component size live in one validated `DetectorConfig`. The detector timer measures the decoded-image processing pipeline, excluding upload, encoding and database time. Invalid upload bytes produce an actionable HTTP error and a last-attempt diagnostic; decoded setup/review outcomes additionally receive an Analysis record with no classification/occupancy. Such attempts never replace a valid current reading or alter alerts. A new calibration clears the current reading but preserves history and active tasks until a valid new measurement provides evidence.
 
+Ordinary HTTP checks do not save generated masks/overlays. Historical service calls and existing evidence retain their original behavior.
+
 ## Synthetic fixtures
 
-`scripts/fixtures.ts` retains one frozen shelf baseline and deterministically generates temporary fixture sets for 12 pairs of textured shelf scenes with colored boxes and rounded containers, plus Empty/Low/Full and mismatched variants. `tests/fixtures/shelves/manifest.json` associates zones with references, normalized ROIs and expected evaluation labels. The expected labels are used only in tests. The production detector never reads the manifest; there are no runtime demo routes. Frozen stock and placement baselines remain test-only. New photo checks skip placement comparison while the historical service compatibility path remains available.
-
-The original generated artwork is marked **CC0** and requires no attribution or downloaded data. Existing sample shelves are labeled “Sample shelf.” Fixtures intentionally sit away from thresholds; actual threshold boundaries are separately unit tested. Full → Low → Empty → Full chronological samples for SH-01 are processed through the same persistence/alert service when seeded.
+`scripts/fixtures.ts` preserves the frozen stock, historical placement and invalid-framing regression images. Optional seeding copies only three existing stock images to a temporary directory and adds one sample shelf with one Low reading. Existing shelves are left unchanged. The detector never reads fixture names or expected labels.
 
 ## Optional placement comparison
 
