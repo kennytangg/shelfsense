@@ -381,8 +381,14 @@ async function main() {
       ).toHaveAttribute("href", `/shelves/${id}`);
       const headingBox = (await card.locator("h2").boundingBox())!;
       const badgeBox = (await card.locator("[data-slot=badge]").boundingBox())!;
-      expect(badgeBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
-      expect(Math.abs(badgeBox.y - headingBox.y)).toBeLessThan(2);
+      if (page.viewportSize()!.width < 400) {
+        expect(badgeBox.y).toBeGreaterThanOrEqual(
+          headingBox.y + headingBox.height,
+        );
+      } else {
+        expect(badgeBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
+        expect(Math.abs(badgeBox.y - headingBox.y)).toBeLessThan(2);
+      }
       await expect(
         card.getByText(
           status === "Full"
@@ -565,11 +571,11 @@ async function main() {
       id: `${id}-layout-${index}`,
       name:
         index === 0
-          ? "Breakfast cereals and pantry essentials on the upper shelf"
+          ? "BreakfastCerealsAndPantryEssentials".repeat(3)
           : `Shelf ${index + 1}`,
       location:
         index === 0
-          ? "Aisle 1 · Front of store · Upper shelves"
+          ? "UpperShelfAtTheFrontOfTheStore".repeat(4)
           : `Aisle ${index + 1}`,
       awaiting_verification: index === 1,
       last_error:
@@ -860,6 +866,74 @@ async function main() {
       .getByRole("link", { name: "Needs restocking", exact: true })
       .tap();
     await expect(touchPage).toHaveURL(base + "/?view=restocking");
+    await touchPage.route(/\/api\/shelves$/, (route) =>
+      route.fulfill({ json: layoutShelves }),
+    );
+    await touchPage.route(`**/api/shelves/${id}`, (route) =>
+      route.fulfill({
+        json: {
+          ...shelf,
+          name: layoutShelves[0].name,
+          location: layoutShelves[0].location,
+        },
+      }),
+    );
+    for (const viewport of [
+      { width: 320, height: 640 },
+      { width: 390, height: 844 },
+      { width: 667, height: 375 },
+    ]) {
+      await touchPage.setViewportSize(viewport);
+      for (const path of ["/", `/shelves/${id}`]) {
+        await touchPage.goto(base + path);
+        await expect(
+          touchPage
+            .getByRole("heading", { level: path === "/" ? 2 : 1 })
+            .first(),
+        ).toBeVisible();
+        await expect
+          .poll(() =>
+            touchPage.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+          )
+          .toBe(true);
+        for (const control of await touchPage
+          .locator("nav a, main a[data-slot=button], main button")
+          .all()) {
+          const bounds = (await control.boundingBox())!;
+          expect(bounds.height).toBeGreaterThanOrEqual(44);
+          expect(bounds.width).toBeGreaterThanOrEqual(44);
+          expect(bounds.x).toBeGreaterThanOrEqual(0);
+          expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+        }
+        if (path === "/" && viewport.width < 640) {
+          const filters = await touchPage
+            .locator(".task-filters a")
+            .evaluateAll((links) =>
+              links.map((link) => link.getBoundingClientRect().y),
+            );
+          expect(new Set(filters).size).toBe(1);
+        }
+      }
+      await touchPage
+        .getByRole("button", { name: "Shelf guide and details", exact: true })
+        .tap();
+      const dialog = touchPage.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      const bounds = (await dialog.boundingBox())!;
+      expect(bounds.x).toBeGreaterThanOrEqual(16);
+      expect(bounds.y).toBeGreaterThanOrEqual(15);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width - 15);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(
+        viewport.height - 15,
+      );
+      await dialog
+        .getByRole("button", { name: "Close", exact: true })
+        .last()
+        .tap();
+      await expect(dialog).not.toBeVisible();
+    }
     await touchContext.close();
     await layoutContext.close();
     console.log(

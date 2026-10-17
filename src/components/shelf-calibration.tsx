@@ -199,7 +199,7 @@ export function CalibrationForm({
             </>
           )}
         </Card>
-        <div className="col-span-full flex flex-col items-start gap-4 text-sm">
+        <div className="col-span-full flex flex-col items-start gap-4 text-sm [&>button]:max-sm:w-full">
           <p className="text-muted-foreground">
             Save your reference and selected area, then check a current shelf
             photo.

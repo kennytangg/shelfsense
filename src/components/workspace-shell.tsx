@@ -13,17 +13,20 @@ export function Workspace({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b py-6 text-sm">
+      <header className="mb-6 flex flex-col items-start justify-between gap-3 border-b py-4 text-sm sm:flex-row sm:items-center sm:py-6">
         <Link href="/" aria-label="ShelfSense home">
           <Brand />
         </Link>
-        <nav className="flex gap-3" aria-label="Main navigation">
+        <nav
+          className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto"
+          aria-label="Main navigation"
+        >
           {[
             ["/", "Shelves"],
             ["/help", "Help"],
           ].map(([href, label]) => (
             <Link
-              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-muted-foreground underline-offset-4 hover:underline aria-[current=page]:font-bold aria-[current=page]:text-foreground aria-[current=page]:underline"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg px-3 py-2 text-muted-foreground underline-offset-4 hover:underline aria-[current=page]:bg-secondary sm:aria-[current=page]:bg-transparent aria-[current=page]:font-bold aria-[current=page]:text-foreground aria-[current=page]:underline"
               key={href}
               href={href}
               aria-current={

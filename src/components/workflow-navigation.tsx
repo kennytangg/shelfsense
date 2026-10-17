@@ -82,7 +82,9 @@ export function ShelfHeader({
         )}
       </div>
       {children && (
-        <div className="flex flex-wrap items-center gap-2">{children}</div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto [&>a:first-child]:max-sm:w-full">
+          {children}
+        </div>
       )}
     </header>
   );

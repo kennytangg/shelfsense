@@ -64,7 +64,7 @@ export function NewShelf() {
           />
         </Label>
         {mutation.isError && <Notice error>{mutation.error.message}</Notice>}
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4 [&>button]:max-sm:w-full">
           <Button disabled={mutation.isPending}>
             {mutation.isPending ? "Adding shelf…" : "Add shelf"}
           </Button>

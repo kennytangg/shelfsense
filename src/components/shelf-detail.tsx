@@ -87,7 +87,7 @@ export function ShelfDetail({ id }: { id: string }) {
             role="region"
             className="my-6 gap-4 p-4 text-base leading-6 shadow-none"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col items-start justify-between gap-3 min-[400px]:flex-row">
               <h2 className="text-lg font-bold leading-6">
                 {shelf.last_error ||
                 (shelf.latest_attempt &&

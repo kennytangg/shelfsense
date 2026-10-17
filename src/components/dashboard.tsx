@@ -36,7 +36,7 @@ export function DashboardView({ view = "" }: { view?: string }) {
       </div>
       <div className="my-6 flex flex-wrap items-center justify-between gap-4">
         <nav
-          className="task-filters flex flex-wrap gap-1 text-sm leading-6"
+          className="task-filters grid w-full grid-cols-[auto_1fr_1fr] gap-1 text-sm leading-5 sm:flex sm:w-auto sm:flex-wrap sm:leading-6"
           aria-label="Shelf tasks"
         >
           {[
@@ -45,7 +45,7 @@ export function DashboardView({ view = "" }: { view?: string }) {
             ["verification", "Restock reported"],
           ].map(([value, label]) => (
             <Link
-              className="inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-primary underline-offset-4 hover:underline aria-[current=page]:font-bold aria-[current=page]:underline"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 py-2 text-center text-primary underline-offset-4 hover:underline aria-[current=page]:bg-secondary aria-[current=page]:font-bold aria-[current=page]:underline sm:px-3"
               key={value}
               href={destination(value)}
               aria-current={view === value ? "page" : undefined}
@@ -100,7 +100,7 @@ export function DashboardView({ view = "" }: { view?: string }) {
               className="simple-card min-w-0 gap-4 shadow-none"
             >
               <CardHeader className="gap-2">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col items-start justify-between gap-3 min-[400px]:flex-row">
                   <h2 className="min-w-0 text-lg font-bold leading-6 wrap-anywhere">
                     {shelf.name}
                   </h2>
