@@ -23,7 +23,7 @@ Without `DATABASE_URL`, the launcher creates a local PostgreSQL Docker container
 4. Read Full / Low / Empty and use **Needs restocking** to find tasks.
 5. After restocking, select **Report restocked**, then upload a new photo to verify recovery.
 
-Setup needs one reusable empty reference; each later check needs one current photo. Optional seeding adds one sample shelf with a Low reading. Existing installations need migration 0002 before using checks without generated evidence; back up database/media together before migrating.
+Setup needs one reusable empty reference; each later check needs one current photo. Run `npm run seed` to add nine [testing examples](docs/testing-data.md) covering stock states, recovery workflows and edge cases. Existing shelves are preserved. Existing installations need migration 0002 before using checks without generated evidence; back up database/media together before migrating.
 
 Estimates describe visible coverage, not product counts. Failed checks keep the previous valid result. See **Help** in the app for the full guide.
 

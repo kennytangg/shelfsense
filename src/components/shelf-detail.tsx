@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, json, Shelf, date } from "./api-client";
 import { ShelfHeader, ShelfAction } from "./workflow-navigation";
 import { DetailsDialog } from "./details-dialog";
+import { ShelfPageSkeleton } from "./shelf-skeleton";
 import { Notice, Status } from "./shelf-ui";
 export function ShelfDetail({ id }: { id: string }) {
   const client = useQueryClient();
@@ -32,7 +33,7 @@ export function ShelfDetail({ id }: { id: string }) {
   const shelf = query.data;
   return (
     <>
-      {query.isPending && <Notice variant="processing">Loading shelf…</Notice>}
+      {query.isPending && <ShelfPageSkeleton />}
       {query.isError && (
         <Notice error>
           {query.error.message}{" "}
@@ -43,7 +44,30 @@ export function ShelfDetail({ id }: { id: string }) {
       )}
       {shelf && (
         <>
-          <ShelfHeader title={shelf.name} shelf={shelf}>
+          <ShelfHeader
+            title={shelf.name}
+            shelf={shelf}
+            guidance={
+              <DetailsDialog title="Shelf guide and details">
+                <p>Last valid check: {date(shelf.current?.created_at)}</p>
+                <p>Restock reported: {date(shelf.reported_restocked_at)}</p>
+                <p>
+                  Report restocked after refilling the shelf. The stock estimate
+                  updates when you check another photo.
+                </p>
+                {[
+                  ...new Set(
+                    [
+                      shelf.last_error,
+                      ...(shelf.latest_attempt?.warnings || []),
+                    ].filter(Boolean),
+                  ),
+                ].map((reason) => (
+                  <p key={reason}>{reason}</p>
+                ))}
+              </DetailsDialog>
+            }
+          >
             <ShelfAction shelf={shelf} />
             <DeleteShelf shelf={shelf} redirect />
             <DropdownMenu>
@@ -63,29 +87,27 @@ export function ShelfDetail({ id }: { id: string }) {
             role="region"
             className="my-6 gap-4 p-4 text-base leading-6 shadow-none"
           >
-            <h2 className="text-lg font-bold leading-6">
-              {shelf.last_error ||
-              (shelf.latest_attempt &&
-                shelf.latest_attempt.outcome !== "Valid" &&
-                shelf.latest_attempt.id !== shelf.current?.id)
-                ? shelf.current
-                  ? "Previous valid result"
-                  : "No valid result"
-                : "Latest result"}
-            </h2>
-            <Status
-              status={
-                shelf.current
-                  ? shelf.current.classification || shelf.status
-                  : shelf.reference
-                    ? "Needs first check"
-                    : "Needs setup"
-              }
-            />
-            <DetailsDialog title="Check details">
-              <p>Last valid check: {date(shelf.current?.created_at)}</p>
-              <p>Restock reported: {date(shelf.reported_restocked_at)}</p>
-            </DetailsDialog>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-bold leading-6">
+                {shelf.last_error ||
+                (shelf.latest_attempt &&
+                  shelf.latest_attempt.outcome !== "Valid" &&
+                  shelf.latest_attempt.id !== shelf.current?.id)
+                  ? shelf.current
+                    ? "Previous valid result"
+                    : "No valid result"
+                  : "Latest result"}
+              </h2>
+              <Status
+                status={
+                  shelf.current
+                    ? shelf.current.classification || shelf.status
+                    : shelf.reference
+                      ? "Needs first check"
+                      : "Needs setup"
+                }
+              />
+            </div>
             {shelf.current && (
               <img
                 className="mx-auto block max-h-96 max-w-full rounded-lg object-contain"
@@ -107,19 +129,7 @@ export function ShelfDetail({ id }: { id: string }) {
               shelf.latest_attempt.id !== shelf.current?.id)) && (
             <Notice error>
               Photo check needs attention. Retake from the reference position
-              with matching framing and lighting.{" "}
-              <DetailsDialog title="Photo check details">
-                {[
-                  ...new Set(
-                    [
-                      shelf.last_error,
-                      ...(shelf.latest_attempt?.warnings || []),
-                    ].filter(Boolean),
-                  ),
-                ].map((reason) => (
-                  <p key={reason}>{reason}</p>
-                ))}
-              </DetailsDialog>
+              with matching framing and lighting.
             </Notice>
           )}
           {(shelf.active_alert || shelf.awaiting_verification) && (
@@ -127,10 +137,6 @@ export function ShelfDetail({ id }: { id: string }) {
               className="my-6 flex flex-wrap items-center gap-4"
               id="restocking"
             >
-              <DetailsDialog title="Restocking">
-                Report restocked after refilling the shelf. The stock estimate
-                updates when you check another photo.
-              </DetailsDialog>
               {shelf.awaiting_verification ? (
                 <>
                   <p>

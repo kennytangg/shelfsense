@@ -495,6 +495,7 @@ export async function updateAlert(s: Row, a: Row, c: Connection) {
 export type AnalysisOptions = {
   demo?: boolean;
   stockOnly?: boolean;
+  saveEvidence?: boolean;
   timestamp?: Date;
   digest?: string;
   expectedVersion?: number;
@@ -565,7 +566,7 @@ export async function analyze(
         keys,
       ),
       overlay =
-        !options.stockOnly && result.overlay
+        !options.stockOnly && options.saveEvidence !== false && result.overlay
           ? await writeAsset(
               id,
               result.overlay,
@@ -575,7 +576,7 @@ export async function analyze(
             )
           : null,
       mask =
-        !options.stockOnly && result.mask
+        !options.stockOnly && options.saveEvidence !== false && result.mask
           ? await writeAsset(
               id,
               result.mask,

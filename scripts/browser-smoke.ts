@@ -79,12 +79,33 @@ async function main() {
         ? "/tmp/shelfsense-browsers/chromium-1194/chrome-linux/chrome"
         : undefined);
     browser = await chromium.launch({ headless: true, executablePath });
-    const page = await browser.newPage({
+    const context = await browser.newContext({
         viewport: { width: 1440, height: 1100 },
       }),
+      page = await context.newPage(),
       errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    let releaseShelves!: () => void;
+    const shelvesGate = new Promise<void>((resolve) => {
+      releaseShelves = resolve;
+    });
+    await page.route("**/api/shelves", async (route) => {
+      await shelvesGate;
+      await route.continue();
+    });
     await page.goto(base);
+    const loadingShelves = page.getByRole("status", {
+      name: "Loading shelves",
+      exact: true,
+    });
+    await expect(loadingShelves).toBeVisible();
+    await expect(loadingShelves.locator("[data-slot=card]")).toHaveCount(6);
+    await expect(
+      page.getByText("Add your first shelf", { exact: false }),
+    ).toHaveCount(0);
+    releaseShelves();
+    await expect(loadingShelves).toHaveCount(0);
+    await page.unroute("**/api/shelves");
     await expect(
       page.getByText("Add your first shelf", { exact: false }),
     ).toBeVisible();
@@ -110,6 +131,35 @@ async function main() {
     await page.getByRole("button", { name: "Add shelf", exact: true }).click();
     await expect(page).toHaveURL(/\/setup$/);
     const id = new URL(page.url()).pathname.split("/")[2];
+    const loadingContext = await browser.newContext();
+    const loadingPage = await loadingContext.newPage();
+    for (const path of [
+      `/shelves/${id}`,
+      `/shelves/${id}/setup`,
+      `/shelves/${id}/check`,
+    ]) {
+      let releaseShelf!: () => void;
+      const shelfGate = new Promise<void>((resolve) => {
+        releaseShelf = resolve;
+      });
+      await loadingPage.route(`**/api/shelves/${id}`, async (route) => {
+        await shelfGate;
+        await route.continue();
+      });
+      await loadingPage.goto(base + path);
+      const loadingShelf = loadingPage.getByRole("status", {
+        name: "Loading shelf",
+        exact: true,
+      });
+      await expect(loadingShelf).toBeVisible();
+      await expect(
+        loadingShelf.locator("[data-slot=skeleton]").first(),
+      ).toBeVisible();
+      releaseShelf();
+      await expect(loadingShelf).toHaveCount(0);
+      await loadingPage.unroute(`**/api/shelves/${id}`);
+    }
+    await loadingContext.close();
     const progress = page.getByRole("navigation", { name: "Shelf progress" });
     await expect(progress.locator('[aria-current="step"]')).toContainText(
       "Set up",
@@ -139,7 +189,14 @@ async function main() {
     expect((await cancel.boundingBox())!.y).toBeLessThan(300);
     await cancel.click();
     await expect(page).toHaveURL(base + "/");
-    await page.goto(base + "/shelves/" + id + "/setup");
+    const unconfiguredCard = page.getByRole("article");
+    await expect(unconfiguredCard.getByRole("link")).toHaveCount(1);
+    await unconfiguredCard
+      .getByRole("link", { name: "View shelf", exact: true })
+      .click();
+    await expect(page).toHaveURL(`${base}/shelves/${id}`);
+    await page.getByRole("link", { name: "Set up shelf", exact: true }).click();
+    await expect(page).toHaveURL(`${base}/shelves/${id}/setup`);
     const sharp = (await import("sharp")).default;
     for (const [width, height] of [
       [160, 320],
@@ -312,15 +369,20 @@ async function main() {
       await page.goto(base);
       const card = page.getByRole("article");
       await expect(card.locator("[data-slot=badge]")).toHaveText(status);
-      await expect(card).toHaveClass(
-        new RegExp(
-          status === "Full"
-            ? "border-t-success"
-            : status === "Low"
-              ? "border-t-warning"
-              : "border-t-destructive",
-        ),
-      );
+      await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+      await expect(card.locator("h2")).toHaveText("Test cereal shelf");
+      await expect(card.locator("h2 a")).toHaveCount(0);
+      await page.mouse.move(0, 0);
+      await expect(
+        card.getByRole("link", { name: "View shelf", exact: true }),
+      ).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(
+        card.getByRole("link", { name: "View shelf", exact: true }),
+      ).toHaveAttribute("href", `/shelves/${id}`);
+      const headingBox = (await card.locator("h2").boundingBox())!;
+      const badgeBox = (await card.locator("[data-slot=badge]").boundingBox())!;
+      expect(badgeBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
+      expect(Math.abs(badgeBox.y - headingBox.y)).toBeLessThan(2);
       await expect(
         card.getByText(
           status === "Full"
@@ -334,13 +396,10 @@ async function main() {
       await expect(
         card.getByRole("button", { name: "Delete shelf", exact: true }),
       ).toHaveCount(0);
-      const action = card.getByRole("link", {
-        name: status === "Full" ? "Check stock" : "Restock shelf",
-        exact: true,
-      });
-      await expect(action).toBeVisible();
+      await expect(card.getByRole("link")).toHaveCount(1);
+      await card.getByRole("link", { name: "View shelf", exact: true }).click();
+      await expect(page).toHaveURL(base + "/shelves/" + id);
       if (status !== "Full") {
-        await action.click();
         await expect(
           page.getByRole("button", { name: "Report restocked", exact: true }),
         ).toBeVisible();
@@ -385,7 +444,9 @@ async function main() {
     await page.goto(base + "/?view=verification");
     await expect(page.locator("[role=article]")).toHaveCount(1);
     await expect(
-      page.getByRole("link", { name: "Verify restock", exact: true }),
+      page
+        .getByRole("article")
+        .getByRole("link", { name: "View shelf", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText(
@@ -404,6 +465,9 @@ async function main() {
     ).toHaveCount(0);
     await page.reload();
     await expect(page.locator("[role=article]")).toHaveCount(1);
+    await expect(page.getByRole("article").getByRole("link")).toHaveCount(1);
+    await page.getByRole("link", { name: "View shelf", exact: true }).click();
+    await expect(page).toHaveURL(`${base}/shelves/${id}`);
     await page
       .getByRole("link", { name: "Verify restock", exact: true })
       .click();
@@ -488,6 +552,9 @@ async function main() {
     if ((await history()) !== before + 1)
       throw Error("Watcher duplicated ingestion");
     await access(folder + "/" + identifier + "/photo.png");
+    console.log(
+      "PASS: stock checks, restocking, verification and folder ingestion",
+    );
 
     // Exercise actual production CSS with several cards without changing stored shelves.
     const layoutContext = await browser.newContext();
@@ -591,6 +658,12 @@ async function main() {
         await layoutPage.goto(base + path);
         const cards = layoutPage.locator("[role=article]");
         await expect(cards).toHaveCount(6);
+        for (const card of await cards.all()) {
+          await expect(card.getByRole("link")).toHaveCount(1);
+          await expect(
+            card.getByRole("link", { name: "View shelf", exact: true }),
+          ).toBeVisible();
+        }
         const boxes = await cards.evaluateAll((cards) =>
           cards.map((card) => {
             const { x, y, width } = card.getBoundingClientRect();
@@ -651,6 +724,11 @@ async function main() {
             });
           }
         }
+        if (path === `/shelves/${id}`) {
+          await expect(
+            layoutPage.locator("button:has(svg.lucide-info)"),
+          ).toHaveCount(1);
+        }
         if (path === `/shelves/${id}` && [1440, 390].includes(width)) {
           await layoutPage.screenshot({
             path: `/tmp/shelfsense-ui-detail-${width}.png`,
@@ -658,7 +736,7 @@ async function main() {
           });
           await layoutPage
             .getByRole("button", {
-              name: "Check details",
+              name: "Shelf guide and details",
               exact: true,
             })
             .click();
@@ -784,7 +862,120 @@ async function main() {
     await expect(touchPage).toHaveURL(base + "/?view=restocking");
     await touchContext.close();
     await layoutContext.close();
+    console.log(
+      "PASS: responsive layouts and accessibility across existing workflows",
+    );
     await page.goto(`${base}/shelves/${id}`);
+    // Existing placement metadata must not reintroduce placement UI.
+    const existingShelf = await (
+      await fetch(base + "/api/shelves/" + id)
+    ).json();
+    const placementReference = new FormData();
+    placementReference.append(
+      "file",
+      new Blob([await readFile("tests/fixtures/shelves/sh-01-full.png")], {
+        type: "image/png",
+      }),
+      "full.png",
+    );
+    placementReference.append(
+      "calibration_version",
+      String(existingShelf.calibration_version),
+    );
+    expect(
+      (
+        await fetch(base + "/api/shelves/" + id + "/placement", {
+          method: "POST",
+          body: placementReference,
+        })
+      ).status,
+    ).toBe(200);
+    const misplacedPhoto = new FormData();
+    misplacedPhoto.append(
+      "file",
+      new Blob([await readFile("tests/fixtures/shelves/sh-01-misplaced.png")], {
+        type: "image/png",
+      }),
+      "current.png",
+    );
+    const placementCheck = await fetch(
+      base + "/api/shelves/" + id + "/analyses",
+      { method: "POST", body: misplacedPhoto },
+    );
+    expect(placementCheck.status).toBe(201);
+    expect((await placementCheck.json()).placement_result.status).toBe(
+      "Placement review",
+    );
+    await page.goto(base + "/?view=placement");
+    await expect(
+      page.locator('.task-filters [aria-current="page"]'),
+    ).toHaveText("All");
+    await expect(page.getByRole("article")).toHaveCount(1);
+    await expect(page.locator(".task-filters a")).toHaveText([
+      "All",
+      "Needs restocking",
+      "Restock reported",
+    ]);
+    await expect(
+      page.getByRole("link", { name: "Review product placement", exact: true }),
+    ).toHaveCount(0);
+    await page.goto(base + "/?view=attention");
+    await expect(
+      page.getByText("No shelves match", { exact: false }),
+    ).toBeVisible();
+    await expect(page.getByRole("article")).toHaveCount(0);
+    await page.goto(base + "/help");
+    await expect(
+      page.getByRole("heading", { name: "Help", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/placement|misplaced/i)).toHaveCount(0);
+    await page.goto(base + "/shelves/" + id + "/check");
+    await expect(
+      page.getByRole("heading", { name: "Check stock", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(/placement/i)).toHaveCount(0);
+    await page.goto(base + "/shelves/" + id);
+    await expect(page.locator("[data-slot=badge]")).toHaveText("Full");
+    await expect(
+      page.locator("#placement-setup, #placement-result"),
+    ).toHaveCount(0);
+    await expect(page.getByText(/placement|correctly arranged/i)).toHaveCount(
+      0,
+    );
+    const { violations: detailViolations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    expect(detailViolations, "Shelf details accessibility").toEqual([]);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 1100 });
+      await expect(page.locator("h1")).toBeVisible();
+      const titleBox = (await page.locator("h1").boundingBox())!;
+      const guideBox = (await page
+        .getByRole("button", {
+          name: "Shelf guide and details",
+          exact: true,
+        })
+        .boundingBox())!;
+      expect(guideBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
+      expect(
+        Math.abs(
+          guideBox.y + guideBox.height / 2 - titleBox.y - titleBox.height / 2,
+        ),
+      ).toBeLessThan(2);
+      await page.locator("h1").click();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        )
+        .toBe(true);
+      await page.screenshot({
+        path: "/tmp/shelfsense-stock-detail-" + width + ".png",
+        fullPage: true,
+      });
+    }
     await page
       .getByRole("button", { name: "Delete shelf", exact: true })
       .click();
@@ -814,7 +1005,7 @@ async function main() {
       throw Error("Deleted shelf is still available");
     if (errors.length) throw Error(errors.join("; "));
     console.log(
-      "PASS: empty workspace, create/setup/check pages, real uploads, alerts and verification, URL filters, Back/Forward, keyboard area selection, folder restart deduplication; responsive readable shelves and task filters, Noto Sans UI and Charter reading typography, centered layouts and direct workflow exits and no overflow across ten screen widths.",
+      "PASS: empty workspace, create/setup/check pages, real uploads, alerts and verification, URL filters, Back/Forward, keyboard area selection, folder restart deduplication; responsive layouts across ten widths; stock-only UI with hidden placement controls/results even when placement metadata exists; accessible mobile/desktop shelf details.",
     );
   } finally {
     await browser?.close();

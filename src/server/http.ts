@@ -215,7 +215,7 @@ async function dispatch(request: Request) {
               );
             else {
               const analysisId = await service.analyze(id, image, {
-                stockOnly: true,
+                saveEvidence: false,
                 digest: upload.deduplicate
                   ? createHash("sha256").update(upload.bytes).digest("hex")
                   : undefined,

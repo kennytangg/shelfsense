@@ -241,7 +241,7 @@ integration(
     );
     assert.equal((await detail(id)).active_alert.id, alert.id);
     assert.equal((await detail(id)).current, null);
-    // Historical service callers can still compare placement; new HTTP checks are stock-only.
+    // Service callers retain evidence; HTTP checks compare placement without extra images.
     const historicalId = await service.analyze(
       id,
       await (
@@ -264,10 +264,32 @@ integration(
     const dash = await (await request("/dashboard")).json();
     assert.ok(dash.attention.some((s: { id: string }) => s.id === id));
     assert.ok(dash.placement_review > 0);
-    const stockOnly = await upload(id, "misplaced");
-    assert.equal(stockOnly.data.placement_result, null);
-    assert.equal(stockOnly.data.overlay, null);
-    assert.equal(stockOnly.data.mask, null);
+    const placementCheck = await upload(id, "misplaced");
+    assert.equal(placementCheck.data.classification, "Full");
+    assert.equal(
+      placementCheck.data.placement_result.status,
+      "Placement review",
+    );
+    assert.equal(placementCheck.data.overlay, null);
+    assert.equal(placementCheck.data.mask, null);
+    assert.equal((await detail(id)).active_alert, null);
+    const retained = await upload(id, "mismatched");
+    assert.equal(retained.data.outcome, "Review required");
+    assert.equal((await detail(id)).current.id, placementCheck.data.id);
+    const matching = await upload(id, "full");
+    assert.equal(matching.data.placement_result.status, "Matches reference");
+    const lowPlacement = await upload(id, "low");
+    assert.equal(lowPlacement.data.classification, "Low");
+    assert.equal(
+      lowPlacement.data.placement_result.status,
+      "Matches reference",
+    );
+    const emptyPlacement = await upload(id, "empty");
+    assert.equal(
+      emptyPlacement.data.placement_result.status,
+      "Not enough evidence",
+    );
+    const stockAlert = (await detail(id)).active_alert.id;
     assert.ok(actual.data.overlay);
     assert.ok(actual.data.mask);
     assert.ok((await detail(id)).placement_reference);
@@ -276,6 +298,11 @@ integration(
       200,
     );
     assert.equal((await detail(id)).placement_reference, null);
+    assert.equal((await detail(id)).active_alert.id, stockAlert);
+    assert.equal((await detail(id)).current, null);
+    const disabled = await upload(id, "misplaced");
+    assert.equal(disabled.data.placement_result, null);
+    assert.equal(disabled.data.classification, "Full");
     const history = await (await request(`/shelves/${id}/analyses`)).json();
     assert.equal(
       history.find((a: { id: string }) => a.id === historicalId)
@@ -501,12 +528,66 @@ integration(
   async () => {
     const { seed, resetDemo } = await import("../scripts/maintenance");
     await seed();
+    const examples = (await service.listShelves()).filter(
+      (shelf) => shelf.demo,
+    );
+    assert.equal(examples.length, 9);
+    const example = (identifier: string) =>
+      examples.find((shelf) => shelf.identifier === identifier)!;
+    const reading = (identifier: string) => {
+      const current = example(identifier).current;
+      assert.ok(current);
+      return current;
+    };
+    assert.equal(example("DEMO-01").status, "Low");
+    assert.equal(example("DEMO-02").status, "Full");
+    assert.equal(example("DEMO-03").status, "Empty");
+    assert.equal(reading("DEMO-04").classification, "Full");
+    assert.equal(
+      reading("DEMO-04").placement_result.status,
+      "Placement review",
+    );
+    assert.equal(example("DEMO-04").active_alert, null);
+    assert.equal(
+      reading("DEMO-05").placement_result.status,
+      "Matches reference",
+    );
+    assert.equal(
+      reading("DEMO-06").placement_result.status,
+      "Not enough evidence",
+    );
+    assert.ok(example("DEMO-06").active_alert);
+    assert.equal(reading("DEMO-07").classification, "Low");
+    assert.equal(
+      reading("DEMO-07").placement_result.status,
+      "Matches reference",
+    );
+    assert.equal(example("DEMO-07").latest_attempt?.outcome, "Review required");
+    assert.ok(example("DEMO-07").active_alert);
+    assert.equal(example("DEMO-08").status, "Low");
+    assert.equal(example("DEMO-08").awaiting_verification, true);
+    assert.equal(example("DEMO-08").active_alert, null);
+    assert.equal(example("DEMO-09").status, "Needs setup");
+    assert.equal(example("DEMO-09").reference, null);
+    assert.equal(example("DEMO-09").current, null);
+    assert.ok(
+      examples.every(
+        (shelf) => !shelf.current?.overlay && !shelf.current?.mask,
+      ),
+    );
     const s = (
-      await db.query("SELECT * FROM shelves WHERE identifier='SH-01'")
+      await db.query("SELECT * FROM shelves WHERE identifier='DEMO-01'")
     )[0];
     await upload(s.id, "low");
     const before = await detail(s.id);
+    for (const shelf of examples) {
+      assert.equal(shelf.name, `Cereals ${Number(shelf.identifier.slice(-2))}`);
+    }
+    const beforeReseed = await service.listShelves();
+    const filesBeforeReseed = (await readdir(media)).sort();
     await seed();
+    assert.deepEqual(await service.listShelves(), beforeReseed);
+    assert.deepEqual((await readdir(media)).sort(), filesBeforeReseed);
     assert.equal((await detail(s.id)).current.id, before.current.id);
     await resetDemo();
     assert.equal((await detail(s.id)).current.id, before.current.id);

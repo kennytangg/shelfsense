@@ -1,4 +1,5 @@
 "use client";
+import { ShelfPageSkeleton } from "./shelf-skeleton";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -86,12 +87,14 @@ export function ShelfWorkflow({
   });
   return (
     <>
-      <ShelfHeader
-        title={mode === "setup" ? "Set up shelf" : "Check stock"}
-        breadcrumbLabel={mode === "setup" ? "Setup" : "Stock check"}
-        shelf={query.data}
-      />
-      {query.isPending && <Notice variant="processing">Loading shelf…</Notice>}
+      {!query.isPending && (
+        <ShelfHeader
+          title={mode === "setup" ? "Set up shelf" : "Check stock"}
+          breadcrumbLabel={mode === "setup" ? "Setup" : "Stock check"}
+          shelf={query.data}
+        />
+      )}
+      {query.isPending && <ShelfPageSkeleton />}
       {query.isError && (
         <Notice error>
           {query.error.message}{" "}

@@ -48,15 +48,17 @@ export function ShelfHeader({
   breadcrumbLabel,
   shelf,
   children,
+  guidance,
 }: {
   title: string;
   breadcrumbLabel?: string;
   shelf?: Shelf;
   children?: React.ReactNode;
+  guidance?: React.ReactNode;
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <Breadcrumbs
           items={[
             ...(shelf && breadcrumbLabel
@@ -65,9 +67,12 @@ export function ShelfHeader({
             { label: breadcrumbLabel ?? shelf?.name ?? title },
           ]}
         />
-        <h1 className="text-[1.75rem] leading-tight tracking-tight wrap-anywhere">
-          {title}
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="min-w-0 text-[1.75rem] leading-tight tracking-tight wrap-anywhere">
+            {title}
+          </h1>
+          {guidance}
+        </div>
         {shelf && (
           <p className="mt-2 flex items-center gap-1 text-sm leading-5 text-muted-foreground wrap-anywhere">
             <MapPin className="shrink-0" size={14} aria-hidden="true" />{" "}

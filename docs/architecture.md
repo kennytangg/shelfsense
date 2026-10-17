@@ -2,7 +2,7 @@
 
 The browser uses the existing React and TanStack Query UI. Relative `/api` and `/media` requests go directly to Node.js Next.js Route Handlers. Server-only modules in `src/server/` own PostgreSQL, validation, private storage, analysis publication, and staff actions. `shelf-analysis.ts` remains independent of persistence and UI. Pages/layouts are Server Components; interactive workflows are Client Components. Database credentials and image-processing libraries stay out of browser bundles.
 
-The original shelf setup, checks, dashboard, locations, restocking and verification workflows are restored. The earlier photo reduction remains: ordinary checks save only their input image and reuse the reference; historical evidence stays readable. The optional demo has one shelf and one initial Low reading.
+The original shelf setup, checks, dashboard, locations, restocking and verification workflows are restored. The earlier photo reduction remains: ordinary checks save only their input image and reuse the reference; historical evidence stays readable. Explicit seeding adds nine stock, placement and recovery examples from five shared synthetic inputs; see [testing data](testing-data.md). Existing shelf identifiers are always preserved.
 
 ## Data and transactions
 
@@ -20,7 +20,7 @@ Review/setup outcomes are persisted with null classification and occupancy. They
 - A subsequent Low/Empty creates a new episode and clears the waiting marker.
 - Valid Full resolves any active task with `Verified full` and clears the marker.
 - Setup, decoding and review failures do not alter stock tasks.
-- Historical placement findings remain independent of stock tasks. The simplified Alerts page includes only active stock alerts and waiting-for-verification shelves. New HTTP checks skip placement comparison.
+- Placement findings remain independent of stock tasks and are retained through the API. The UI displays stock results and restocking tasks only; placement setup, results and filters are not rendered. The legacy attention view includes active stock tasks and pending verification only.
 
 ## REST contract
 
@@ -89,9 +89,9 @@ Unused UI screenshots, duplicate demo PNGs, the obsolete Python version file and
 
 ## User pages and initialization
 
-The header links to `/` (Shelves) and `/help`. Legacy `/alerts` redirects to `/?view=attention`. Creation uses `/shelves/new`; setup and checks use `/shelves/[id]/setup` and `/shelves/[id]/check`. Results use `/shelves/[id]`; legacy `?setup=1` redirects to setup. The dashboard offers only All, Needs restocking and Restock reported (`?view=restocking|verification`); the legacy attention link remains supported. Old stock-filter parameters are ignored. Task membership comes from active alerts and pending verification, independently of measured stock. Mutation invalidation refreshes shelf, dashboard and alert queries.
+The header links to `/` (Shelves) and `/help`. Legacy `/alerts` redirects to `/?view=attention`. Creation uses `/shelves/new`; setup and checks use `/shelves/[id]/setup` and `/shelves/[id]/check`. Results use `/shelves/[id]`; legacy `?setup=1` redirects to setup. The dashboard offers All, Needs restocking and Restock reported (`?view=restocking|verification`); the legacy attention link remains supported. Old stock-filter parameters are ignored. Task membership comes from active alerts and pending verification, independently of measured stock. Mutation invalidation refreshes shelf, dashboard and alert queries.
 
-`npm run initialize` creates a single shared store only, reuses the existing store regardless of its demo flag, and rejects ambiguous multiple-store data. Normal startup never seeds shelves. Existing records remain intact. There are no runtime sample endpoints, placement controls, or detector tuning inputs.
+`npm run initialize` creates a single shared store only, reuses the existing store regardless of its demo flag, and rejects ambiguous multiple-store data. Normal startup never seeds shelves. Existing records remain intact. Placement configuration and findings remain API-only, with no placement controls, results or guidance in the user workflow. Old `?view=placement` links fall back to All. There are no runtime sample endpoints or detector tuning inputs.
 
 Shelf deletion requires confirmation in the shelf detail screen. It locks the shelf and removes its dependent records in one transaction, then removes its stored images after commit. In-flight processing cannot publish to a deleted shelf. Media cleanup failures are logged; hosted orphan objects can be removed with `npm run storage:cleanup -- --apply`.
 

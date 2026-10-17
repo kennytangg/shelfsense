@@ -16,14 +16,17 @@ export async function fixtures(root = "tests/fixtures/shelves") {
   const baseline = JSON.parse(
     await readFile(new URL("manifest.json", source), "utf8"),
   ).shelves[0];
-  const { empty, low, full } = baseline.samples;
-  const shelf = { ...baseline, samples: { empty, low, full } };
+  const shelf = baseline;
   const manifest = {
-    description: "One synthetic sample shelf; original generated artwork, CC0.",
+    description:
+      "Synthetic stock, placement and rejected-photo examples; original generated artwork, CC0.",
     shelves: [shelf],
   };
   await mkdir(root, { recursive: true });
-  for (const file of new Set([shelf.reference, low.file, full.file]))
+  const files = new Set<string>([shelf.reference]);
+  for (const sample of Object.values(shelf.samples) as { file: string }[])
+    files.add(sample.file);
+  for (const file of files)
     await copyFile(new URL(file as string, source), `${root}/${file}`);
   await writeFile(
     `${root}/manifest.json`,

@@ -14,11 +14,11 @@
 
 Thresholds, processing width, morphology size and minimum component size live in one validated `DetectorConfig`. The detector timer measures the decoded-image processing pipeline, excluding upload, encoding and database time. Invalid upload bytes produce an actionable HTTP error and a last-attempt diagnostic; decoded setup/review outcomes additionally receive an Analysis record with no classification/occupancy. Such attempts never replace a valid current reading or alter alerts. A new calibration clears the current reading but preserves history and active tasks until a valid new measurement provides evidence.
 
-Ordinary HTTP checks do not save generated masks/overlays. Historical service calls and existing evidence retain their original behavior.
+Ordinary HTTP checks compare placement when configured and save the input and comparison metadata without generated masks/overlays (`saveEvidence: false`). Service calls retain evidence by default; `stockOnly` explicitly skips placement. Existing evidence retains its original behavior.
 
 ## Synthetic fixtures
 
-`scripts/fixtures.ts` preserves the frozen stock, historical placement and invalid-framing regression images. Optional seeding copies only three existing stock images to a temporary directory and adds one sample shelf with one Low reading. Existing shelves are left unchanged. The detector never reads fixture names or expected labels.
+`scripts/fixtures.ts` preserves the frozen stock, historical placement and invalid-framing regression images. Optional seeding copies all five existing inputs into a temporary directory and adds nine [testing scenarios](testing-data.md), including all placement outcomes, a retained result after an invalid photo, a reported refill and an unconfigured shelf. Existing shelves are left unchanged. The detector never reads fixture names or expected labels.
 
 ## Optional placement comparison
 
@@ -37,15 +37,13 @@ Lab distance at least 35. At least 18% mismatching shared pixels produces **Plac
 review**; other comparisons report **Matches reference**. All three thresholds are
 validated configurable settings. They are heuristic defaults, not confidence scores.
 
-Orange overlay pixels show appearance mismatches; teal continues to show stock
-foreground. Responses also expose the compared fraction of the ROI, mismatch
+When service callers save overlays, orange pixels show appearance mismatches; teal shows stock foreground. Placement references/results remain available through the API; the staff interface displays stock findings only. Responses also expose the compared fraction of the ROI, mismatch
 fraction of compared pixels, explanatory reason and placement algorithm version.
 Processing duration includes the extra comparison when configured.
 
 The `misplaced.png` fixtures replace packaging appearance in nine occupied slots.
 They retain Full coverage, and tests verify separate placement review while ordinary
-Low samples still match the remaining expected products. Placement findings appear
-in dashboard attention but do not change the restocking task state machine.
+Low samples still match the remaining expected products. Placement findings remain in API responses, independently of the restocking task state machine. They are not displayed in the dashboard or shelf workflow.
 
 This comparison requires a fixed camera and expected layout. It cannot identify a
 SKU, detect every misplaced item, or distinguish wrong packaging from changed

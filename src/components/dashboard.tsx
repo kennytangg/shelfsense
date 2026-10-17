@@ -6,7 +6,7 @@ import { api, Shelf } from "./api-client";
 import { Notice, Status } from "./shelf-ui";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card";
-import { cn } from "@/lib/utils";
+import { ShelvesSkeleton } from "./shelf-skeleton";
 import { shelfPresentation } from "./shelf-presentation";
 export function DashboardView({ view = "" }: { view?: string }) {
   const query = useQuery({
@@ -55,9 +55,7 @@ export function DashboardView({ view = "" }: { view?: string }) {
           ))}
         </nav>
       </div>
-      {query.isPending && (
-        <Notice variant="processing">Loading shelves…</Notice>
-      )}
+      {query.isPending && <ShelvesSkeleton />}
       {query.isError && (
         <Notice error>
           {query.error.message}{" "}
@@ -99,26 +97,15 @@ export function DashboardView({ view = "" }: { view?: string }) {
               key={shelf.id}
               role="article"
               aria-label={shelf.name}
-              className={cn(
-                "simple-card min-w-0 gap-4 shadow-none",
-                shelf.awaiting_verification
-                  ? "border-primary/25 bg-secondary/40"
-                  : presentation.badge === "Empty"
-                    ? "border-destructive/25 bg-danger-background/30"
-                    : presentation.badge === "Low"
-                      ? "border-warning/25 bg-warning-background/30"
-                      : "",
-              )}
+              className="simple-card min-w-0 gap-4 shadow-none"
             >
               <CardHeader className="gap-2">
-                <h2 className="text-lg font-bold leading-6 wrap-anywhere">
-                  <Link
-                    className="text-foreground underline-offset-4 hover:underline"
-                    href={`/shelves/${shelf.id}`}
-                  >
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="min-w-0 text-lg font-bold leading-6 wrap-anywhere">
                     {shelf.name}
-                  </Link>
-                </h2>
+                  </h2>
+                  <Status status={presentation.badge} />
+                </div>
                 <p className="flex items-start gap-1 text-sm leading-5 text-muted-foreground wrap-anywhere">
                   <MapPin
                     className="mt-0.5 size-3.5 shrink-0"
@@ -129,7 +116,6 @@ export function DashboardView({ view = "" }: { view?: string }) {
                     {shelf.demo ? " · Sample shelf" : ""}
                   </span>
                 </p>
-                <Status status={presentation.badge} />
               </CardHeader>
               <CardContent className="space-y-2 text-muted-foreground">
                 <p className="text-sm leading-5">
@@ -150,18 +136,8 @@ export function DashboardView({ view = "" }: { view?: string }) {
                 )}
               </CardContent>
               <CardFooter className="mt-auto flex-wrap justify-end gap-2 border-0 bg-transparent pt-0">
-                <Button
-                  asChild
-                  variant={
-                    shelf.active_alert || shelf.awaiting_verification
-                      ? "default"
-                      : "ghost"
-                  }
-                >
-                  <Link href={presentation.href}>
-                    {presentation.action}
-                    <span aria-hidden="true">→</span>
-                  </Link>
+                <Button asChild variant="ghost">
+                  <Link href={`/shelves/${shelf.id}`}>View shelf</Link>
                 </Button>
               </CardFooter>
             </Card>

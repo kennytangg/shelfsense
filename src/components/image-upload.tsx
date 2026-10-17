@@ -12,6 +12,7 @@ export function FilePicker({
   disabled = false,
   prompt = "Choose a shelf photo",
   existingPreview = "",
+  label = "Shelf photo",
 }: {
   file: File | null;
   setFile: (file: File) => void;
@@ -19,6 +20,7 @@ export function FilePicker({
   disabled?: boolean;
   prompt?: string;
   existingPreview?: string;
+  label?: string;
 }) {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
@@ -83,7 +85,7 @@ export function FilePicker({
           className="absolute inset-0 h-full w-full cursor-inherit opacity-0"
           type="file"
           disabled={disabled}
-          aria-label="Shelf photo"
+          aria-label={label}
           accept="image/png,image/jpeg"
           onChange={(e) => select(e.target.files?.[0])}
         />

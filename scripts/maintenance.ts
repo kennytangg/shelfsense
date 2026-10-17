@@ -3,11 +3,63 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pool, transaction, query, insert } from "../src/server/database";
-import { calibrate, analyze } from "../src/server/shelves";
+import {
+  calibrate,
+  analyze,
+  configurePlacement,
+  getShelf,
+  activeAlert,
+  staffAction,
+} from "../src/server/shelves";
 import { decode } from "../src/server/shelf-analysis";
-import { calibrationSchema } from "../src/server/validation";
+import { calibrationSchema, placementSchema } from "../src/server/validation";
 import { cleanup } from "../src/server/storage";
 import { fixtures } from "./fixtures";
+type SeedScenario = {
+  identifier: string;
+  name: string;
+  sample: "low" | "full" | "empty" | "misplaced" | null;
+  placement?: boolean;
+  rejectedPhoto?: boolean;
+  reportedRestocked?: boolean;
+};
+const seedScenarios: SeedScenario[] = [
+  { identifier: "DEMO-01", name: "Cereals 1", sample: "low" },
+  { identifier: "DEMO-02", name: "Cereals 2", sample: "full" },
+  { identifier: "DEMO-03", name: "Cereals 3", sample: "empty" },
+  {
+    identifier: "DEMO-04",
+    name: "Cereals 4",
+    sample: "misplaced",
+    placement: true,
+  },
+  {
+    identifier: "DEMO-05",
+    name: "Cereals 5",
+    sample: "full",
+    placement: true,
+  },
+  {
+    identifier: "DEMO-06",
+    name: "Cereals 6",
+    sample: "empty",
+    placement: true,
+  },
+  {
+    identifier: "DEMO-07",
+    name: "Cereals 7",
+    sample: "low",
+    placement: true,
+    rejectedPhoto: true,
+  },
+  {
+    identifier: "DEMO-08",
+    name: "Cereals 8",
+    sample: "low",
+    reportedRestocked: true,
+  },
+  { identifier: "DEMO-09", name: "Cereals 9", sample: null },
+];
 export async function initialize() {
   return transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(762410)");
@@ -41,14 +93,17 @@ export async function seed() {
   try {
     const manifest = await fixtures(fixtureDirectory);
     const storeId = await initialize();
-    for (const e of manifest.shelves) {
+    const e = manifest.shelves[0];
+    const image = async (file: string) =>
+      decode(await readFile(join(fixtureDirectory, file)));
+    for (const scenario of seedScenarios) {
       const id = await transaction(async (c) => {
         await c.query("SELECT pg_advisory_xact_lock(762410)");
         if (
           (
             await query(
               "SELECT id FROM shelves WHERE store_id=$1 AND identifier=$2",
-              [storeId, e.identifier],
+              [storeId, scenario.identifier],
               c,
             )
           ).length
@@ -61,8 +116,8 @@ export async function seed() {
             {
               id: randomUUID(),
               store_id: storeId,
-              identifier: e.identifier,
-              name: e.name,
+              identifier: scenario.identifier,
+              name: scenario.name,
               location: e.location,
               category: "Groceries",
               demo: true,
@@ -76,20 +131,40 @@ export async function seed() {
           )
         ).id;
       });
-      if (!id) continue;
+      if (!id) {
+        console.log(`Preserved ${scenario.identifier}: already exists.`);
+        continue;
+      }
+      if (!scenario.sample) {
+        console.log(`Seeded ${scenario.identifier}: ${scenario.name}.`);
+        continue;
+      }
       await calibrate(
         id,
-        await decode(await readFile(join(fixtureDirectory, e.reference))),
+        await image(e.reference),
         calibrationSchema.parse({ roi: e.roi }),
         true,
       );
-      await analyze(
-        id,
-        await decode(
-          await readFile(join(fixtureDirectory, e.samples.low.file)),
-        ),
-        { demo: true, stockOnly: true },
-      );
+      if (scenario.placement)
+        await configurePlacement(
+          id,
+          await image(e.samples.full.file),
+          placementSchema.parse({}),
+          (await getShelf(id)).calibration_version,
+          true,
+        );
+      await analyze(id, await image(e.samples[scenario.sample].file), {
+        demo: true,
+        saveEvidence: false,
+      });
+      if (scenario.rejectedPhoto)
+        await analyze(id, await image(e.samples.mismatched.file), {
+          demo: true,
+          saveEvidence: false,
+        });
+      if (scenario.reportedRestocked)
+        await staffAction((await activeAlert(id))!.id, "report_restocked");
+      console.log(`Seeded ${scenario.identifier}: ${scenario.name}.`);
     }
   } finally {
     await rm(fixtureDirectory, { recursive: true, force: true });

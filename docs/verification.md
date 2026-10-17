@@ -97,3 +97,45 @@ Removed Delete shelf from every dashboard card. Open the shelf name to reach the
 ## Simplified card hierarchy
 
 Cards use a thin neutral border, modest corners, more internal space and an unfilled footer. Shelf names lead in dark bold text; supporting copy is muted. Low stock, empty shelves and reported restocks receive subtle status tints, while routine cards stay white. Status labels and icons preserve meaning without relying on colour. Primary buttons remain reserved for restocking and verification tasks; routine card actions use a quieter text treatment.
+
+## Optional placement detection (2026-10-17)
+
+Placement detection is now available through the shelf detail page. Staff can save a correctly arranged Full reference, check photos for stock and appearance together, inspect retained results and their expected arrangement, filter the dashboard to Placement review, and disable comparison. Placement findings remain separate from restocking tasks. HTTP checks retain input photos and comparison metadata without saving generated masks/overlays. No schema migration is required.
+
+Passed: typecheck, format:check, 29 Node regressions plus 2 Jest launcher tests (zero skipped), production build, production browser suite and Git whitespace checks. API regressions cover matching/changed arrangements, insufficient evidence, failed-photo retention, reference history and disabling while retaining stock tasks. Browser checks exercise real placement controls/uploads, rejected non-Full references, review-filter reload, failed-photo retention, all three outcomes and disabling; axe scans include expanded placement setup and results with zero WCAG A/AA violations. Screenshots at 390/1440px are `/tmp/shelfsense-placement-{width}.png`. Visual inspection caught a narrow mobile shelf heading; actions now wrap below the heading, and the suite asserts readable heading width.
+
+The existing browser assertions were updated for current card tints. The new axe scan required an explicit browser context; that harness issue is fixed. A concurrent typecheck/build initially raced over generated Next.js types; final checks ran after the completed build. A sandboxed build failed reading TypeScript configuration; the final production build passed with approved access. Tests used disposable schemas in `shelfsense_simplification_test` and temporary media; application shelves/media were not modified.
+
+Not run: hosted PostgreSQL/private Blob provider verification, physical-device and screen-reader checks. The placement comparison remains a fixed-camera appearance heuristic, without SKU identification or a claimed real-store accuracy rate.
+
+## Expanded testing seeds (2026-10-17)
+
+Explicit seeding now creates DEMO-01 through DEMO-09 for Low/Full/Empty, placement review, matching placement, insufficient placement evidence, a rejected latest photo with a retained valid reading, a reported refill awaiting verification, and an unconfigured shelf. All cases use the five frozen source images and existing service operations; no detector baselines or migrations changed. See [testing data](testing-data.md) for expected states and manual steps.
+
+Passed: typecheck, format:check, production build, 29 Node regressions and 2 Jest tests (zero skipped), and Git whitespace checks. Database regressions verify all nine states, repeat seeding without row/image changes, and protected demo reset. Fixture checks verify all five source files, unique bytes, stock/placement outcomes and invalid framing. Tests use disposable schemas in the separate test database and temporary media.
+
+The local application was seeded successfully with nine new DEMO examples. Existing SH-01 through SH-12 samples and all other existing shelves were preserved. No application reset or migration was run.
+
+Not rerun for this seed-only change: production browser suite, hosted-provider, physical-device and screen-reader checks. The browser result in the optional placement section above remains the last UI verification.
+
+## Placement UI removal (2026-10-17)
+
+Removed optional placement setup/results from shelf details, the placement notice from stock checks, the dashboard review filter/link and placement Help instructions. Legacy `?view=placement` links display All; attention includes only stock tasks and pending verification. The underlying API, detector, seed cases and stored references/results remain intact. Documentation now distinguishes backend placement cases from the visible stock workflow.
+
+Passed: typecheck, format:check, 29 Node tests plus 2 Jest launcher tests (zero skipped), production build, production browser suite and Git whitespace checks. The simplified browser regression configures placement through the API, creates a real mismatch, then checks that the UI displays only Full with no placement controls/results, that old filter links fall back to All, and that placement alone does not enter the stock attention view. Desktop/mobile detail screenshots are `/tmp/shelfsense-stock-detail-{width}.png`; the 390px view was visually reviewed. Accessibility scans include the detail page and the existing five-page workflow, with zero WCAG A/AA violations. Tests used disposable schemas and temporary media; no application data was modified.
+
+Not run: hosted-provider verification, physical-device and screen-reader checks.
+
+## Card layout refinement (2026-10-17)
+
+Shelf cards use a uniform background, with the measured-status badge aligned to the right of the heading. Titles are plain text; View shelf is the only card button and opens the shelf detail page. Restocking and verification filters remain available, and task actions live inside the shelf page. The shelf detail page has one guide beside the page title, combining check dates, photo warnings and restocking guidance. Setup guidance sits beside its panel heading. Browser regressions cover neutral card backgrounds, badge alignment, button navigation and a single detail guide.
+
+Validation passed: typecheck, format check, 29 Node tests and 2 Jest tests (zero skipped), production build, and the complete production browser suite across ten widths. Desktop cards and mobile shelf details were visually reviewed. The browser suite now checks title/guide alignment instead of requiring the title to fill its row. No database records in the application database were changed.
+
+The single-button card regression checks unconfigured, measured and pending-verification shelves open their detail page through View shelf. Setup, restocking and verification remain available inside that page; collection filter membership is unchanged.
+
+## Transparent card actions and loading placeholders (2026-10-17)
+
+View shelf uses the transparent ghost button style. Shared skeleton primitives now show card placeholders during initial collection loads and a page placeholder while shelf details, setup or check data loads. Existing content stays visible during background refreshes. Loading placeholders have an accessible status label and respect reduced-motion preferences. Demo seed names are Cereals 1 through Cereals 9, with scenario details retained in badges, descriptions and testing-data documentation. Custom names are displayed verbatim. Browser checks hold API responses to verify skeletons appear before data and disappear afterward, and verify transparent buttons and unchanged shelf titles across stock changes.
+
+Validation passed: typecheck, format check, 29 Node tests plus 2 Jest tests (zero skipped), production build, complete browser workflows and responsive/accessibility checks. The nine existing local DEMO names were explicitly renamed only where the demo flag, identifier and original generated name matched; other shelves, images, analyses and tasks were preserved. Repeat seeding still leaves existing records unchanged.

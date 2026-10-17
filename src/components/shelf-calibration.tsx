@@ -63,7 +63,16 @@ export function CalibrationForm({
           role="region"
           className="workflow-panel min-w-0 gap-4 p-4 text-base leading-6 shadow-none"
         >
-          <h2 className="text-lg font-bold leading-6">Empty shelf reference</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="min-w-0 text-lg font-bold leading-6">
+              Empty shelf reference
+            </h2>
+            <DetailsDialog title="Setup guidance">
+              Use an empty shelf as the baseline. Repeat setup if the camera
+              moves. Drag across the area to monitor, or focus the selection and
+              use arrow keys to move it; hold Shift to resize.
+            </DetailsDialog>
+          </div>
           <FilePicker
             existingPreview={shelf.reference?.url}
             file={file}
@@ -73,11 +82,6 @@ export function CalibrationForm({
           />
           <div className="flex flex-wrap items-center gap-2 text-base leading-6">
             Choose an empty shelf photo, then mark the area to monitor.
-            <DetailsDialog title="Setup guidance">
-              Use an empty shelf as the baseline. Repeat setup if the camera
-              moves. Drag across the area to monitor, or focus the selection and
-              use arrow keys to move it; hold Shift to resize.
-            </DetailsDialog>
           </div>
         </Card>
         <Card

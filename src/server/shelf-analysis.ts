@@ -398,7 +398,7 @@ export async function comparePlacement(
       mismatch_ratio: ratio,
       compared_ratio: compared,
       reason: flagged
-        ? "Occupied appearance differs from the expected layout. Orange marks differences; inspect for misplaced items, lighting changes, or camera movement."
+        ? "Occupied appearance differs from the expected layout. Inspect for misplaced items, lighting changes, or camera movement."
         : "Compared occupied areas match the expected appearance; missing areas are excluded.",
     };
   } finally {
