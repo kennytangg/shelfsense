@@ -288,10 +288,26 @@ export function errorResponse(e: unknown) {
   if (e instanceof HttpError) return json({ detail: e.message }, e.status);
   if (e instanceof ZodError)
     return json({ detail: e.issues.map((i) => i.message).join("; ") }, 422);
-  let cause = e as { code?: string; cause?: unknown };
+  let cause = e as {
+    code?: string;
+    constraint?: string;
+    cause?: unknown;
+  };
   while (!cause.code && cause.cause) cause = cause.cause as typeof cause;
   const code = cause.code;
-  if (code?.startsWith("23"))
+  if (code?.startsWith("23")) {
+    console.error("Database constraint violation", {
+      code,
+      constraint: cause.constraint,
+    });
+    if (cause.constraint === "analyses_check")
+      return json(
+        {
+          detail:
+            "The database schema is out of date for photo checks. Ask the operator to run `npm run migrate`, then retry.",
+        },
+        503,
+      );
     return json(
       {
         detail:
@@ -299,6 +315,7 @@ export function errorResponse(e: unknown) {
       },
       409,
     );
+  }
   if (
     code?.startsWith("08") ||
     ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "57P01"].includes(code ?? "")
