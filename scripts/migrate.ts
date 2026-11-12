@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { pool, transaction } from "../src/server/database";
+import { EXPECTED_MIGRATION_VERSIONS } from "../src/server/migration-versions";
 export async function migrate() {
   await transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(762411)");
@@ -14,7 +15,7 @@ export async function migrate() {
       throw Error(
         "Existing schema has no migration history; use a fresh database.",
       );
-    const versions = ["0001", "0002"];
+    const versions = EXPECTED_MIGRATION_VERSIONS;
     if (journal.rows.some((row) => !versions.includes(row.version)))
       throw Error("Unsupported migration history; use a fresh database.");
     if (

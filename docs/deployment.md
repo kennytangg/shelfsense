@@ -15,7 +15,21 @@ Migration 0002 makes saved mask/overlay evidence optional while preserving measu
 
 Production migration execution belongs in the release workflow, not request handlers or every Vercel function startup. Hosted database/media transfer, preview verification, and production deployment are intentionally pending until provider access and target resources exist.
 
+## After every deploy
+
+1. If the release adds a migration, run `npm run migrate` against the hosted database from the release environment first (back up first). Migrations never run per request.
+2. Run `SMOKE_USERNAME=… SMOKE_PASSWORD=… npm run smoke -- --url https://<host>` with the operator credentials in those env vars only (never flags, never committed). It makes read-only GET requests and exits non-zero if any check fails. `GET /api/health` also answers 503 with `"schema":"outdated"` and `missing_migrations` when the journal lacks an expected version, so uptime monitors catch it; `/api/health` sits behind the operator gate on hosted deployments, so give monitors the credentials.
+
+| Failure                                          | Meaning                                                      | Fix                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------- |
+| `health: schema outdated, missing migrations: …` | Database lacks those migrations; checks would fail.          | `npm run migrate` against that database.            |
+| `media route: … route is not deployed`           | `/media` got the platform's HTML 404, so photos are blank.   | Fix `.vercelignore` (see below) and redeploy.       |
+| `reference image: … HTTP 404`                    | Stored image missing from Blob/media storage or wrong store. | Check Blob token/store and that media was migrated. |
+| `shelves` / `page …` / HTTP 401                  | App error, or credentials missing or wrong.                  | Check `SMOKE_*` values, then function logs.         |
+
 ## Troubleshooting
+
+Run the checks in [After every deploy](#after-every-deploy) first; they detect the first two problems below.
 
 - **Checks fail with "conflicts with an existing record".** Migration 0002 has not been applied to the hosted database, so saving a check without mask/overlay evidence violates the old `analyses_check` constraint. The API now answers 503 asking the operator to run `npm run migrate`; run it against the hosted database from the release environment (back up first).
 - **Photos are blank and `/media/<id>.png` returns Vercel's static HTML 404, even for an invented id.** The `/media` route handler is missing from the deployment. An unanchored `backend/` or `media/` line in `.vercelignore` matches at any depth and drops `src/app/media/` from the upload. Keep those entries root-anchored (`/backend/`, `/media/`); `tests/vercelignore.test.ts` checks that no tracked source file is excluded.

@@ -21,6 +21,7 @@
     "reset-demo": "node --conditions=react-server --import tsx scripts/maintenance.ts reset-demo",
     "watch": "node --import tsx scripts/watch.ts",
     "backup": "node scripts/backup.mjs",
+    "smoke": "node --import tsx scripts/deploy-smoke.ts",
     "test:browser": "node --import tsx scripts/browser-smoke.ts",
     "migrate:media": "node --conditions=react-server --import tsx scripts/migrate-media.ts",
     "storage:cleanup": "node --conditions=react-server --import tsx scripts/cleanup-storage.ts",

@@ -658,3 +658,62 @@ integration(
     assert.deepEqual(new Set(await readdir(media)), before);
   },
 );
+
+integration("health reports a fully migrated schema as ready", async () => {
+  const response = await request("/health");
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    api: "ready",
+    database: "ready",
+    schema: "ready",
+  });
+});
+
+integration(
+  "health returns 503 and lists a migration missing from the journal",
+  async () => {
+    const [row] = await db.query(
+      "SELECT version, checksum FROM shelfsense_migrations WHERE version='0002'",
+    );
+    await db.query("DELETE FROM shelfsense_migrations WHERE version='0002'");
+    try {
+      const response = await request("/health");
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), {
+        api: "ready",
+        database: "ready",
+        schema: "outdated",
+        missing_migrations: ["0002"],
+      });
+    } finally {
+      await db.query(
+        "INSERT INTO shelfsense_migrations(version,checksum) VALUES($1,$2)",
+        [row.version, row.checksum],
+      );
+    }
+  },
+);
+
+integration(
+  "health returns 503 outdated when the journal table is absent",
+  async () => {
+    await db.query(
+      "ALTER TABLE shelfsense_migrations RENAME TO shelfsense_migrations_hidden",
+    );
+    try {
+      const response = await request("/health");
+      assert.equal(response.status, 503);
+      const body = await response.json();
+      assert.equal(body.schema, "outdated");
+      assert.deepEqual(body.missing_migrations, ["0001", "0002"]);
+      assert.doesNotMatch(
+        JSON.stringify(body),
+        /shelfsense_migrations|relation/,
+      );
+    } finally {
+      await db.query(
+        "ALTER TABLE shelfsense_migrations_hidden RENAME TO shelfsense_migrations",
+      );
+    }
+  },
+);

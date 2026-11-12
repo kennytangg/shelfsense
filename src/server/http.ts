@@ -12,6 +12,7 @@ import {
 } from "./validation";
 import { decode, MAX_BYTES } from "./shelf-analysis";
 import { uploadTicket, uploadedBytes, blobUpload } from "./upload-tickets";
+import { pendingMigrations } from "./migration-versions";
 import type { HandleUploadBody } from "@vercel/blob/client";
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -80,8 +81,18 @@ async function dispatch(request: Request) {
       parts = url.pathname.slice(5).split("/").filter(Boolean),
       method = request.method;
     if (parts.join("/") === "health" && method === "GET") {
-      await query("SELECT 1");
-      return json({ api: "ready", database: "ready" });
+      const missing = await pendingMigrations();
+      if (missing.length)
+        return json(
+          {
+            api: "ready",
+            database: "ready",
+            schema: "outdated",
+            missing_migrations: missing,
+          },
+          503,
+        );
+      return json({ api: "ready", database: "ready", schema: "ready" });
     }
     if (parts.join("/") === "store" && method === "GET")
       return json(await service.activeStore());
