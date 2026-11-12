@@ -16,6 +16,7 @@ import { ShelfHeader, ShelfAction } from "./workflow-navigation";
 import { DetailsDialog } from "./details-dialog";
 import { ShelfPageSkeleton } from "./shelf-skeleton";
 import { Notice, Status } from "./shelf-ui";
+import { ShelfHistory } from "./shelf-history";
 export function ShelfDetail({ id }: { id: string }) {
   const client = useQueryClient();
   const query = useQuery({
@@ -158,6 +159,7 @@ export function ShelfDetail({ id }: { id: string }) {
               {report.isError && <Notice error>{report.error.message}</Notice>}
             </section>
           )}
+          <ShelfHistory shelfId={id} />
         </>
       )}
     </>

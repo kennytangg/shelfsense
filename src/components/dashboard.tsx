@@ -1,31 +1,56 @@
 "use client";
 import { MapPin } from "lucide-react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { api, Shelf } from "./api-client";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useShelves } from "./use-shelves";
+import {
+  SHELF_STATUSES,
+  ShelfView,
+  filterShelves,
+  sortByUrgency,
+  summarizeShelves,
+} from "./shelf-summary";
 import { Notice, Status } from "./shelf-ui";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardContent, CardFooter } from "./ui/card";
 import { ShelvesSkeleton } from "./shelf-skeleton";
 import { shelfPresentation } from "./shelf-presentation";
-export function DashboardView({ view = "" }: { view?: string }) {
-  const query = useQuery({
-    queryKey: ["shelves"],
-    queryFn: () => api<Shelf[]>("/shelves"),
-  });
+export function DashboardView({
+  view = "",
+  status = "",
+}: {
+  view?: ShelfView;
+  status?: string;
+}) {
+  const router = useRouter();
+  const query = useShelves();
+  const [search, setSearch] = useState("");
   const shelves = query.data || [];
-  const visible = shelves
-    .filter((shelf) =>
-      view === "restocking"
-        ? !!shelf.active_alert
-        : view === "verification"
-          ? shelf.awaiting_verification
-          : view === "attention"
-            ? shelf.active_alert || shelf.awaiting_verification
-            : true,
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const destination = (task: string) => (task ? `/?view=${task}` : "/");
+  const summary = summarizeShelves(shelves);
+  const visible = sortByUrgency(
+    filterShelves(shelves, { view, status, search }),
+  );
+  const destination = (next: { view?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    if (next.view) params.set("view", next.view);
+    if (next.status) params.set("status", next.status);
+    const text = params.toString();
+    return text ? `/?${text}` : "/";
+  };
+  const tabs: [ShelfView, string, number][] = [
+    ["", "All", summary.total],
+    ["attention", "Needs attention", summary.attention],
+    ["restocking", "Needs restocking", summary.restocking],
+    ["verification", "Restock reported", summary.verification],
+  ];
+  const stats: [string, number][] = [
+    ["Empty", summary.empty],
+    ["Low", summary.low],
+    ["Full", summary.full],
+    ["Not checked", summary.notChecked],
+    ["Needs setup", summary.needsSetup],
+  ];
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -34,26 +59,65 @@ export function DashboardView({ view = "" }: { view?: string }) {
           <Link href="/shelves/new">Add shelf</Link>
         </Button>
       </div>
+      {!query.isPending && !query.isError && summary.total > 0 && (
+        <ul
+          className="my-6 grid grid-cols-2 gap-3 sm:grid-cols-5"
+          aria-label="Stock summary"
+        >
+          {stats.map(([label, count]) => (
+            <li key={label}>
+              <Link
+                className="block rounded-lg border p-3 text-sm leading-5 aria-[current=true]:border-primary aria-[current=true]:font-bold"
+                href={destination({ status: status === label ? "" : label })}
+                aria-current={status === label}
+              >
+                <span className="block text-2xl tabular-nums">{count}</span>
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="my-6 flex flex-wrap items-center justify-between gap-4">
         <nav
-          className="task-filters grid w-full grid-cols-[auto_1fr_1fr] gap-1 text-sm leading-5 sm:flex sm:w-auto sm:flex-wrap sm:leading-6"
+          className="task-filters grid w-full grid-cols-2 gap-1 text-sm leading-5 sm:flex sm:w-auto sm:flex-wrap sm:leading-6"
           aria-label="Shelf tasks"
         >
-          {[
-            ["", "All"],
-            ["restocking", "Needs restocking"],
-            ["verification", "Restock reported"],
-          ].map(([value, label]) => (
+          {tabs.map(([value, label, count]) => (
             <Link
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 py-2 text-center text-primary underline-offset-4 hover:underline aria-[current=page]:bg-secondary aria-[current=page]:font-bold aria-[current=page]:underline sm:px-3"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 py-2 text-center text-primary underline-offset-4 hover:underline aria-[current=page]:bg-secondary aria-[current=page]:font-bold aria-[current=page]:underline sm:px-3"
               key={value}
-              href={destination(value)}
+              href={destination({ view: value, status })}
               aria-current={view === value ? "page" : undefined}
             >
               {label}
+              <span className="tabular-nums">({count})</span>
             </Link>
           ))}
         </nav>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <input
+            type="search"
+            aria-label="Search shelves"
+            placeholder="Search name or location"
+            className="min-h-11 flex-1 rounded-lg border bg-background px-3 text-sm sm:w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            aria-label="Filter by stock status"
+            className="min-h-11 rounded-lg border bg-background px-2 text-sm"
+            value={status}
+            onChange={(e) =>
+              router.push(destination({ view, status: e.target.value }))
+            }
+          >
+            <option value="">All statuses</option>
+            {SHELF_STATUSES.map((label) => (
+              <option key={label}>{label}</option>
+            ))}
+          </select>
+        </div>
       </div>
       {query.isPending && <ShelvesSkeleton />}
       {query.isError && (
@@ -68,15 +132,8 @@ export function DashboardView({ view = "" }: { view?: string }) {
         <Notice>
           {shelves.length ? (
             <>
-              No shelves match{" "}
-              {view === "verification"
-                ? "Restock reported"
-                : view === "restocking"
-                  ? "Needs restocking"
-                  : view === "attention"
-                    ? "Needs attention"
-                    : "All tasks"}
-              . <Link href="/">Show all shelves</Link>
+              No shelves match the current filters.{" "}
+              <Link href="/">Show all shelves</Link>
             </>
           ) : (
             <>
@@ -138,6 +195,9 @@ export function DashboardView({ view = "" }: { view?: string }) {
               <CardFooter className="mt-auto flex-wrap justify-end gap-2 border-0 bg-transparent pt-0">
                 <Button asChild variant="ghost">
                   <Link href={`/shelves/${shelf.id}`}>View shelf</Link>
+                </Button>
+                <Button asChild>
+                  <Link href={presentation.href}>{presentation.action}</Link>
                 </Button>
               </CardFooter>
             </Card>

@@ -2,8 +2,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "./shelf-ui";
+import { useShelves } from "./use-shelves";
+import { summarizeShelves } from "./shelf-summary";
 export function Workspace({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const attention = summarizeShelves(useShelves().data ?? []).attention;
   const isCollection = pathname === "/" || pathname === "/alerts";
   return (
     <div className="mx-auto max-w-[90rem] px-4 pb-12 sm:px-8">
@@ -18,11 +21,12 @@ export function Workspace({ children }: { children: React.ReactNode }) {
           <Brand />
         </Link>
         <nav
-          className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto"
+          className="grid w-full grid-cols-3 gap-3 sm:flex sm:w-auto"
           aria-label="Main navigation"
         >
           {[
             ["/", "Shelves"],
+            ["/alerts", "Alerts"],
             ["/help", "Help"],
           ].map(([href, label]) => (
             <Link
@@ -40,6 +44,12 @@ export function Workspace({ children }: { children: React.ReactNode }) {
               }
             >
               {label}
+              {href === "/alerts" && attention > 0 && (
+                <span className="ml-2 rounded-full bg-destructive px-2 text-xs leading-5 text-white tabular-nums">
+                  {attention}
+                  <span className="sr-only"> shelves need attention</span>
+                </span>
+              )}
             </Link>
           ))}
         </nav>
