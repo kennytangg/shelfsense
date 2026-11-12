@@ -2,6 +2,8 @@
 
 ## Regression coverage
 
+Browser end-to-end runs are logged in [e2e-test-log.md](e2e-test-log.md); run them with `npm run test:e2e`.
+
 The application uses `migrations/0001.sql` plus `0002.sql`, which allows valid stock checks without saved masks/overlays. API tests exercise fresh and repeated migrations, checksum changes, unsupported migration histories, and rejection of schemas without recorded history. Tests use disposable schemas in a separate `TEST_DATABASE_URL` and temporary media.
 
 The detector matches expected stock and placement outputs for five frozen cases in `tests/fixtures/detector-expected.json`. Tests also cover threshold equality, invalid settings, decoding failures, byte/pixel/dimension/format limits, quality rejection, and EXIF orientation. Trusted normalized references retain decoded-pixel checks while allowing PNGs larger than the original JPEG upload limit.

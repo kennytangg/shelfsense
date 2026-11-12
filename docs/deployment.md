@@ -14,3 +14,9 @@ The API uses Node runtime and a 60-second function duration. Current [Vercel lim
 Migration 0002 makes saved mask/overlay evidence optional while preserving measurements and ownership. Back up database/media together before applying it to an existing installation. No application database has been migrated by this change.
 
 Production migration execution belongs in the release workflow, not request handlers or every Vercel function startup. Hosted database/media transfer, preview verification, and production deployment are intentionally pending until provider access and target resources exist.
+
+## Troubleshooting
+
+- **Checks fail with "conflicts with an existing record".** Migration 0002 has not been applied to the hosted database, so saving a check without mask/overlay evidence violates the old `analyses_check` constraint. The API now answers 503 asking the operator to run `npm run migrate`; run it against the hosted database from the release environment (back up first).
+- **Photos are blank and `/media/<id>.png` returns Vercel's static HTML 404, even for an invented id.** The `/media` route handler is missing from the deployment. An unanchored `backend/` or `media/` line in `.vercelignore` matches at any depth and drops `src/app/media/` from the upload. Keep those entries root-anchored (`/backend/`, `/media/`); `tests/vercelignore.test.ts` checks that no tracked source file is excluded.
+- **A one-off script hangs connecting to Neon.** `channel_binding=require` in the connection string made node-pg hang here. Removing that parameter (keeping `sslmode=require`) worked.
