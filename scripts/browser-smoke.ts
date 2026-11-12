@@ -270,7 +270,15 @@ async function main() {
     for (let n = 0; n < 20; n++) await page.keyboard.press("Shift+ArrowUp");
     for (let n = 0; n < 5; n++) await page.keyboard.press("ArrowRight");
     for (let n = 0; n < 10; n++) await page.keyboard.press("ArrowDown");
-    await page.getByRole("button", { name: "Save setup", exact: true }).click();
+    const save = page.getByRole("button", { name: "Save setup", exact: true });
+    await save.click();
+    await expect(page.getByRole("alert").first()).toContainText(
+      "Choose a fully stocked photo",
+    );
+    await page
+      .getByLabel("Fully stocked photo")
+      .setInputFiles("tests/fixtures/shelves/sh-01-full.png");
+    await save.click();
     await expect(page).toHaveURL(/\/check$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Check stock",

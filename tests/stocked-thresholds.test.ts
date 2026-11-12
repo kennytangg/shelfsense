@@ -2,22 +2,28 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decode, detect, classify } from "../src/server/shelf-analysis";
-import { scaleThresholds } from "../src/server/stocked-thresholds";
+import {
+  EMPTY_LEVEL,
+  FULL_LEVEL,
+  scaleThresholds,
+} from "../src/server/stocked-thresholds";
 import { settingsSchema, roiSchema } from "../src/server/validation";
 
 test("scaleThresholds scales the defaults to the full coverage", () => {
   const s = scaleThresholds(0.33);
+  assert.equal(EMPTY_LEVEL, 0.15);
+  assert.equal(FULL_LEVEL, 0.75);
   assert.ok(Math.abs(s.empty_threshold - 0.0495) < 1e-12);
-  assert.ok(Math.abs(s.full_threshold - 0.198) < 1e-12);
+  assert.ok(Math.abs(s.full_threshold - 0.2475) < 1e-12);
   assert.equal(s.stocked_coverage, 0.33);
   assert.doesNotThrow(() =>
     settingsSchema.parse({ ...s, difference_threshold: 28 }),
   );
 });
-test("scaleThresholds with full coverage 1 reproduces ordered defaults", () => {
+test("scaleThresholds with full coverage 1 gives the levels themselves", () => {
   const s = scaleThresholds(1);
-  assert.equal(s.empty_threshold, 0.15);
-  assert.equal(s.full_threshold, 0.6);
+  assert.equal(s.empty_threshold, EMPTY_LEVEL);
+  assert.equal(s.full_threshold, FULL_LEVEL);
 });
 test("scaleThresholds rejects a stocked photo that looks empty", () => {
   for (const f of [0, 0.049, Number.NaN])

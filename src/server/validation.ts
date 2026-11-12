@@ -23,6 +23,8 @@ export const settingsSchema = z
     full_threshold: z.number().gt(0).lt(1).default(DEFAULT_FULL_THRESHOLD),
     // Coverage of the fully stocked photo this shelf was calibrated from, if any.
     stocked_coverage: z.number().gt(0).max(1).nullable().default(null),
+    // Algorithm version that measured stocked_coverage; thresholds from another one are stale.
+    stocked_algorithm: z.string().max(60).nullable().default(null),
   })
   .refine(
     (s) => s.empty_threshold < s.full_threshold && s.morphology_size % 2 === 1,

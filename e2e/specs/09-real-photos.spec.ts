@@ -89,6 +89,36 @@ test.describe("Real bookshelf photos (local only)", () => {
     await expect(resultBadge(page)).toHaveText("Full");
   });
 
+  test("default whole-image area (no dragging): empty, half, full, mostly full", async ({
+    page,
+  }) => {
+    // Exactly what a first-time owner does: pick the two photos and save, leaving
+    // the monitored area at its default (the whole image).
+    await addShelfViaForm(page, "Real bookshelf default area", "Study wall");
+    const id = shelfIdFromUrl(page);
+    await page
+      .getByLabel("Shelf photo")
+      .setInputFiles(photo("01-empty-reference.jpg"));
+    await page
+      .getByLabel("Fully stocked photo")
+      .setInputFiles(photo("04-full.jpg"));
+    await page.getByRole("button", { name: "Save setup", exact: true }).click();
+    await expect(page).toHaveURL(`/shelves/${id}/check`);
+
+    for (const [file, expected] of [
+      ["02-empty-again.jpg", "Empty"],
+      ["03-half.jpg", "Low"],
+      ["05-full-again.jpg", "Full"],
+      ["07-mostly-full.jpg", "Full"],
+    ] as const) {
+      await submitCheck(page, id, photo(file));
+      await expect(page).toHaveURL(
+        new RegExp(`/shelves/${id}(\\?duplicate=1)?$`),
+      );
+      await expect(resultBadge(page), file).toHaveText(expected);
+    }
+  });
+
   test("the same photo as both empty and stocked reference is refused", async ({
     page,
   }) => {

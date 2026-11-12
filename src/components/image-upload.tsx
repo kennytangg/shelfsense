@@ -87,7 +87,11 @@ export function FilePicker({
           disabled={disabled}
           aria-label={label}
           accept="image/png,image/jpeg"
-          onChange={(e) => select(e.target.files?.[0])}
+          onChange={(e) => {
+            select(e.target.files?.[0]);
+            // Lets the same file be chosen again after it was removed.
+            e.target.value = "";
+          }}
         />
       </label>
       {file && (

@@ -299,8 +299,14 @@ async function stockedSettings(
   return settingsSchema.parse({
     ...config.settings,
     ...scaleThresholds(result.occupancy_ratio),
+    stocked_algorithm: ALGORITHM_VERSION,
   });
 }
+/** Thresholds measured by an older detector no longer match the current one. */
+export const STALE_CALIBRATION_MESSAGE =
+  "Detection was improved. Run setup again with the empty and fully stocked photos.";
+const isStaleCalibration = (s: Settings) =>
+  s.stocked_coverage !== null && s.stocked_algorithm !== ALGORITHM_VERSION;
 const sameRoi = (a: ROI, b: ROI) =>
   (["x", "y", "width", "height"] as const).every(
     (k) => Math.abs(a[k] - b[k]) < 1e-9,
@@ -316,6 +322,7 @@ async function carriedSettings(
 ): Promise<Settings> {
   const before = settingsSchema.parse(previous.settings);
   if (before.stocked_coverage === null || !previous.roi) return config.settings;
+  if (before.stocked_algorithm !== ALGORITHM_VERSION) return config.settings;
   if (!sameRoi(roiSchema.parse(previous.roi), config.roi))
     return config.settings;
   if (!previous.reference_image_id) return config.settings;
@@ -331,6 +338,7 @@ async function carriedSettings(
     empty_threshold: before.empty_threshold,
     full_threshold: before.full_threshold,
     stocked_coverage: before.stocked_coverage,
+    stocked_algorithm: before.stocked_algorithm,
   };
 }
 export async function calibrate(
@@ -643,7 +651,10 @@ export async function analyzeWithStatus(
       duration_ms: 0,
     };
     let placement = null;
-    if (s.reference_image_id) {
+    const calibrated = settingsSchema.parse(s.settings);
+    if (isStaleCalibration(calibrated)) {
+      result.warnings = [STALE_CALIBRATION_MESSAGE];
+    } else if (s.reference_image_id) {
       const ref = await timed("load-reference", () =>
         loadReference(s.reference_image_id),
       );

@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { test, expect } from "../support/test";
 import { REAL_PHOTOS, SHELF_IMAGES } from "../support/fixtures";
 import { ShelfApi } from "../support/api";
@@ -82,6 +83,35 @@ test.describe("Stock check", () => {
     await page
       .getByLabel("Shelf photo")
       .setInputFiles(REAL_PHOTOS.emptyEggShelf);
+    // The stocked photo is required; stand in with the same photo plus dark blocks.
+    const { width = 0, height = 0 } = await sharp(
+      REAL_PHOTOS.emptyEggShelf,
+    ).metadata();
+    const blocks = await sharp({
+      create: {
+        width: Math.floor(width / 2),
+        height: Math.floor(height / 2),
+        channels: 3,
+        background: "#222222",
+      },
+    })
+      .png()
+      .toBuffer();
+    const stocked = await sharp(REAL_PHOTOS.emptyEggShelf)
+      .composite([
+        {
+          input: blocks,
+          left: Math.floor(width / 4),
+          top: Math.floor(height / 4),
+        },
+      ])
+      .png()
+      .toBuffer();
+    await page.getByLabel("Fully stocked photo").setInputFiles({
+      name: "stocked.png",
+      mimeType: "image/png",
+      buffer: stocked,
+    });
     await page.getByRole("button", { name: "Save setup", exact: true }).click();
     await expect(page).toHaveURL(`/shelves/${id}/check`);
 

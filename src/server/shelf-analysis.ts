@@ -9,7 +9,8 @@ import {
   type PlacementSettings,
 } from "./validation";
 import { estimateGain, removeGain } from "./exposure";
-export const ALGORITHM_VERSION = "empty-reference-lab/1.1";
+import { normalizeIllumination } from "./illumination";
+export const ALGORITHM_VERSION = "empty-reference-lab/2.0";
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const MAX_PIXELS = 20_000_000;
 export type RGB = { data: Buffer; width: number; height: number };
@@ -153,11 +154,18 @@ export async function detect(
       cv.resize(region, out, new cv.Size(width, height), 0, 0, cv.INTER_AREA);
       return out;
     }
+    // Per-channel exposure/white balance from outside the ROI (if any), then a blockwise
+    // luminance gain so uneven window light is not mistaken for stock.
     const gain = estimateGain(reference, current, roi),
+      balanced: RGB = {
+        data: Buffer.from(removeGain(current.data, gain)),
+        width: current.width,
+        height: current.height,
+      },
+      normalised = normalizeIllumination(reference, balanced),
       a = crop(reference, ab),
-      b = crop(current, bb),
+      b = crop(normalised, bb),
       gray = mat();
-    b.data.set(removeGain(b.data, gain));
     cv.cvtColor(b, gray, cv.COLOR_RGB2GRAY);
     let sum = 0,
       sq = 0;

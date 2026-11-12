@@ -39,12 +39,12 @@ test.describe("Shelf setup", () => {
       }),
     ).toBeVisible();
     await selectFixtureArea(page);
-    // Optional fully stocked photo: shown with plain wording, removable.
+    // Required fully stocked photo: shown with plain wording, removable.
     await expect(
-      page.getByRole("heading", { name: "Fully stocked photo (recommended)" }),
+      page.getByRole("heading", { name: "Fully stocked photo" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Helps ShelfSense know what full looks like"),
+      page.getByText("Shows ShelfSense what full looks like"),
     ).toBeVisible();
     await page
       .getByLabel("Fully stocked photo")
@@ -54,6 +54,16 @@ test.describe("Shelf setup", () => {
       page.getByRole("button", { name: "Remove stocked photo" }),
     ).toBeVisible();
     await expect(save).toBeEnabled();
+    // Without the stocked photo, saving is refused with a plain message.
+    await page.getByRole("button", { name: "Remove stocked photo" }).click();
+    await save.click();
+    await expect(page.locator("main").getByRole("alert")).toContainText(
+      "Choose a fully stocked photo",
+    );
+    await expect(page).toHaveURL(`/shelves/${id}/setup`);
+    await page
+      .getByLabel("Fully stocked photo")
+      .setInputFiles(SHELF_IMAGES.full);
     await save.click();
 
     // Setup done: the app moves on to the stock check page.

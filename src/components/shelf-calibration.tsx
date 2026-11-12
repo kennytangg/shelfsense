@@ -32,6 +32,8 @@ export function CalibrationForm({
   }, [file]);
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!stocked)
+        throw new Error("Choose a fully stocked photo of the same shelf.");
       // Existing immutable reference may be reused when adjusting calibration.
       const reference =
         file ||
@@ -45,7 +47,7 @@ export function CalibrationForm({
         "calibration",
         reference,
         { config: { roi } },
-        stocked ?? undefined,
+        stocked,
       );
     },
     onSuccess: async () => {
@@ -77,11 +79,10 @@ export function CalibrationForm({
             disabled={mutation.isPending}
             prompt="Choose an empty reference photo"
           />
-          <h3 className="text-base font-bold leading-6">
-            Fully stocked photo (recommended)
-          </h3>
+          <h3 className="text-base font-bold leading-6">Fully stocked photo</h3>
           <p className="text-sm leading-5 text-muted-foreground">
-            Helps ShelfSense know what full looks like for this shelf.
+            Shows ShelfSense what full looks like for this shelf. Use the same
+            camera position.
           </p>
           <FilePicker
             file={stocked}

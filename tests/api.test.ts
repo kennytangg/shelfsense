@@ -5,6 +5,7 @@ import { readFile, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { randomUUID, createHash } from "node:crypto";
 import { config } from "dotenv";
+import { EMPTY_LEVEL, FULL_LEVEL } from "../src/server/stocked-thresholds";
 config({ path: ".env", quiet: true });
 const application = process.env.DATABASE_URL;
 const target = process.env.TEST_DATABASE_URL;
@@ -794,8 +795,10 @@ integration(
     assert.equal(b.status, 200);
     const f = b.data.settings.stocked_coverage;
     assert.ok(f > 0.05 && f <= 1);
-    assert.ok(Math.abs(b.data.settings.full_threshold - 0.6 * f) < 1e-9);
-    assert.ok(Math.abs(b.data.settings.empty_threshold - 0.15 * f) < 1e-9);
+    assert.ok(Math.abs(b.data.settings.full_threshold - FULL_LEVEL * f) < 1e-9);
+    assert.ok(
+      Math.abs(b.data.settings.empty_threshold - EMPTY_LEVEL * f) < 1e-9,
+    );
     assert.equal(b.data.calibration_version, 1);
     const check = await upload(scaled, "low");
     assert.equal(check.status, 201);
@@ -837,5 +840,28 @@ integration(
     const moved = await setup(id, { roi: { x: 0, y: 0, width: 1, height: 1 } });
     assert.equal(moved.data.settings.full_threshold, 0.6);
     assert.equal(moved.data.settings.stocked_coverage, null);
+  },
+);
+integration(
+  "a calibration measured by an older algorithm asks for setup instead of guessing",
+  async () => {
+    const id = await create();
+    const first = await setup(id, { stocked: "full" });
+    assert.match(
+      first.data.settings.stocked_algorithm,
+      /^empty-reference-lab\//,
+    );
+    await db.query(
+      'UPDATE shelves SET settings = settings || \'{"stocked_algorithm":"empty-reference-lab/1.1"}\'::jsonb WHERE id=$1',
+      [id],
+    );
+    const stale = await upload(id, "low");
+    assert.equal(stale.status, 201);
+    assert.equal(stale.data.outcome, "Needs setup");
+    assert.match(JSON.stringify(stale.data.warnings), /Run setup again/);
+    // Re-saving without a stocked photo must not carry the stale thresholds.
+    const again = await setup(id);
+    assert.equal(again.data.settings.stocked_coverage, null);
+    assert.equal(again.data.settings.full_threshold, 0.6);
   },
 );
