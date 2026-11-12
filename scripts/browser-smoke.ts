@@ -8,7 +8,7 @@ import { createServer } from "node:net";
 import { setTimeout } from "node:timers/promises";
 import { Pool } from "pg";
 import { config } from "dotenv";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect, type Page } from "@playwright/test";
 config({ path: ".env", quiet: true });
 async function main() {
   if (!process.env.TEST_DATABASE_URL)
@@ -190,7 +190,13 @@ async function main() {
     await cancel.click();
     await expect(page).toHaveURL(base + "/");
     const unconfiguredCard = page.getByRole("article");
-    await expect(unconfiguredCard.getByRole("link")).toHaveCount(1);
+    await expect(unconfiguredCard.getByRole("link")).toHaveText([
+      "View shelf",
+      "Set up shelf",
+    ]);
+    await expect(
+      unconfiguredCard.getByRole("link", { name: "Set up shelf", exact: true }),
+    ).toHaveAttribute("href", `/shelves/${id}/setup`);
     await unconfiguredCard
       .getByRole("link", { name: "View shelf", exact: true })
       .click();
@@ -363,7 +369,7 @@ async function main() {
       release();
       await expect(page).toHaveURL(base + "/shelves/" + id);
       await page.unroute(endpoint);
-      await expect(page.locator("[data-slot=badge]")).toHaveText(status, {
+      await expect(resultBadge(page)).toHaveText(status, {
         timeout: 30000,
       });
       await page.goto(base);
@@ -402,7 +408,10 @@ async function main() {
       await expect(
         card.getByRole("button", { name: "Delete shelf", exact: true }),
       ).toHaveCount(0);
-      await expect(card.getByRole("link")).toHaveCount(1);
+      await expect(card.getByRole("link")).toHaveText([
+        "View shelf",
+        status === "Full" ? "Check stock" : "Restock shelf",
+      ]);
       await card.getByRole("link", { name: "View shelf", exact: true }).click();
       await expect(page).toHaveURL(base + "/shelves/" + id);
       if (status !== "Full") {
@@ -429,7 +438,7 @@ async function main() {
       .setInputFiles("tests/fixtures/shelves/mismatched.png");
     await page.getByRole("button", { name: /^Check stock$/ }).click();
     await expect(page).toHaveURL(base + "/shelves/" + id);
-    await expect(page.locator("[data-slot=badge]")).toHaveText("Low");
+    await expect(resultBadge(page)).toHaveText("Low");
     await expect(
       page.getByText("Photo check needs attention.", { exact: false }),
     ).toBeVisible();
@@ -446,7 +455,7 @@ async function main() {
         { exact: false },
       ),
     ).toBeVisible();
-    await expect(page.locator("[data-slot=badge]")).toHaveText("Low");
+    await expect(resultBadge(page)).toHaveText("Low");
     await page.goto(base + "/?view=verification");
     await expect(page.locator("[role=article]")).toHaveCount(1);
     await expect(
@@ -471,7 +480,10 @@ async function main() {
     ).toHaveCount(0);
     await page.reload();
     await expect(page.locator("[role=article]")).toHaveCount(1);
-    await expect(page.getByRole("article").getByRole("link")).toHaveCount(1);
+    await expect(page.getByRole("article").getByRole("link")).toHaveText([
+      "View shelf",
+      "Verify restock",
+    ]);
     await page.getByRole("link", { name: "View shelf", exact: true }).click();
     await expect(page).toHaveURL(`${base}/shelves/${id}`);
     await page
@@ -499,7 +511,7 @@ async function main() {
     await check("reference", "Empty");
     await page.goto(base);
     await page
-      .getByRole("link", { name: "Needs restocking", exact: true })
+      .getByRole("link", { name: "Needs restocking (1)", exact: true })
       .click();
     await expect(page).toHaveURL(base + "/?view=restocking");
     await page.reload();
@@ -508,7 +520,7 @@ async function main() {
       page.getByRole("article").locator("[data-slot=badge]"),
     ).toHaveText("Empty");
     await page
-      .getByRole("link", { name: "Restock reported", exact: true })
+      .getByRole("link", { name: "Restock reported (0)", exact: true })
       .click();
     await expect(
       page.getByText("No shelves match", { exact: false }),
@@ -523,7 +535,7 @@ async function main() {
     ).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(base + "/shelves/" + id);
-    await expect(page.locator("[data-slot=badge]")).toHaveText("Empty");
+    await expect(resultBadge(page)).toHaveText("Empty");
     if (
       !(await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -665,7 +677,7 @@ async function main() {
         const cards = layoutPage.locator("[role=article]");
         await expect(cards).toHaveCount(6);
         for (const card of await cards.all()) {
-          await expect(card.getByRole("link")).toHaveCount(1);
+          await expect(card.getByRole("link")).toHaveCount(2);
           await expect(
             card.getByRole("link", { name: "View shelf", exact: true }),
           ).toBeVisible();
@@ -863,7 +875,7 @@ async function main() {
     ).toBeVisible();
     await touchPage.goto(base);
     await touchPage
-      .getByRole("link", { name: "Needs restocking", exact: true })
+      .getByRole("link", { name: "Needs restocking (1)", exact: true })
       .tap();
     await expect(touchPage).toHaveURL(base + "/?view=restocking");
     await touchPage.route(/\/api\/shelves$/, (route) =>
@@ -913,7 +925,11 @@ async function main() {
             .evaluateAll((links) =>
               links.map((link) => link.getBoundingClientRect().y),
             );
-          expect(new Set(filters).size).toBe(1);
+          // Four tabs lay out as a deliberate two-column, two-row grid.
+          expect(filters).toHaveLength(4);
+          expect(filters[0]).toBe(filters[1]);
+          expect(filters[2]).toBe(filters[3]);
+          expect(filters[2]).toBeGreaterThan(filters[0]);
         }
       }
       await touchPage
@@ -983,12 +999,13 @@ async function main() {
     await page.goto(base + "/?view=placement");
     await expect(
       page.locator('.task-filters [aria-current="page"]'),
-    ).toHaveText("All");
+    ).toHaveText("All(1)");
     await expect(page.getByRole("article")).toHaveCount(1);
     await expect(page.locator(".task-filters a")).toHaveText([
-      "All",
-      "Needs restocking",
-      "Restock reported",
+      "All(1)",
+      "Needs attention(0)",
+      "Needs restocking(0)",
+      "Restock reported(0)",
     ]);
     await expect(
       page.getByRole("link", { name: "Review product placement", exact: true }),
@@ -1009,7 +1026,7 @@ async function main() {
     ).toBeVisible();
     await expect(page.getByText(/placement/i)).toHaveCount(0);
     await page.goto(base + "/shelves/" + id);
-    await expect(page.locator("[data-slot=badge]")).toHaveText("Full");
+    await expect(resultBadge(page)).toHaveText("Full");
     await expect(
       page.locator("#placement-setup, #placement-result"),
     ).toHaveCount(0);
@@ -1097,3 +1114,15 @@ main().catch((e) => {
   console.error(e.stack || e.message);
   process.exitCode = 1;
 });
+
+/** Badge in the shelf page result card; excludes the Check history rows. */
+function resultBadge(page: Page) {
+  return page
+    .getByRole("region")
+    .filter({
+      has: page.getByRole("heading", {
+        name: /^(Latest result|Previous valid result|No valid result)$/,
+      }),
+    })
+    .locator("[data-slot=badge]");
+}

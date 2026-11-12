@@ -17,6 +17,7 @@ node_modules/
 # Test reports and local logs
 playwright-report/
 test-results/
+e2e/.artifacts/
 coverage/
 *.log
 
