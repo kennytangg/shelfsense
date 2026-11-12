@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, json, Shelf, Analysis, uploadImage } from "./api-client";
-import { Notice } from "./shelf-ui";
+import { LoadError, Notice } from "./shelf-ui";
 import { FilePicker } from "./image-upload";
 import { ShelfHeader, WorkflowProgress } from "./workflow-navigation";
 import { CalibrationForm } from "./shelf-calibration";
@@ -28,7 +28,7 @@ export function NewShelf() {
   });
   return (
     <>
-      <ShelfHeader title="Add shelf" breadcrumbLabel="New shelf" />
+      <ShelfHeader title="Add shelf" />
       <WorkflowProgress stage="add" />
       <form
         className="mt-6 flex max-w-[44rem] flex-col gap-6"
@@ -48,17 +48,10 @@ export function NewShelf() {
         </Label>
         <Label className="grid gap-2 text-base leading-6">
           Location
-          <span
-            id="location-help"
-            className="text-sm leading-5 text-muted-foreground"
-          >
-            Where staff can find this shelf, e.g. Aisle 2, top shelf.
-          </span>
           <Input
             required
             maxLength={120}
-            aria-label="Location"
-            aria-describedby="location-help"
+            placeholder="Where staff can find it, e.g. Aisle 2, top shelf"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />
@@ -90,22 +83,20 @@ export function ShelfWorkflow({
       {!query.isPending && (
         <ShelfHeader
           title={mode === "setup" ? "Set up shelf" : "Check stock"}
-          breadcrumbLabel={mode === "setup" ? "Setup" : "Stock check"}
           shelf={query.data}
         />
       )}
       {query.isPending && <ShelfPageSkeleton />}
       {query.isError && (
-        <Notice error>
-          {query.error.message}{" "}
-          <Button variant="outline" onClick={() => query.refetch()}>
-            Retry
-          </Button>
-        </Notice>
+        <LoadError
+          what="this shelf"
+          error={query.error}
+          onRetry={() => query.refetch()}
+        />
       )}
       {query.data && (
         <>
-          <WorkflowProgress stage={mode} shelf={query.data} />
+          {mode === "setup" && <WorkflowProgress stage="setup" />}
           {mode === "setup" ? (
             <CalibrationForm
               shelf={query.data}
@@ -130,9 +121,13 @@ function CheckForm({ shelf }: { shelf: Shelf }) {
   const router = useRouter();
   const mutation = useMutation({
     mutationFn: () => uploadImage<Analysis>(shelf.id, "analyses", file!),
-    onSuccess: async () => {
+    onSuccess: async (analysis) => {
       await client.invalidateQueries();
-      router.push(`/shelves/${shelf.id}`);
+      router.push(
+        analysis.duplicate
+          ? `/shelves/${shelf.id}?duplicate=1`
+          : `/shelves/${shelf.id}`,
+      );
     },
     onError: () => client.invalidateQueries(),
   });

@@ -13,6 +13,7 @@ export type Settings = {
   min_component_pixels: number;
   empty_threshold: number;
   full_threshold: number;
+  stocked_coverage?: number | null;
 };
 export type PlacementSettings = {
   appearance_distance: number;
@@ -28,6 +29,8 @@ export type PlacementResult = {
 };
 export type Analysis = {
   id: string;
+  /** True when the same photo was already checked and the earlier result is returned. */
+  duplicate?: boolean;
   shelf_id: string;
   outcome: string;
   classification: string | null;
@@ -94,15 +97,34 @@ export type Dashboard = {
   attention: Shelf[];
 };
 export type Store = { name: string; location: string };
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`/api${path}`, { cache: "no-store", ...init });
-  } catch {
-    throw new Error(
-      "Cannot reach ShelfSense. Check that the web app is running.",
-    );
+const TRANSIENT = new Set([502, 503, 504]);
+/** PATCH actions are idempotent on the server, so one retry is safe. */
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  const attempts = init?.method === "PATCH" ? 2 : 1;
+  let last: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt) await new Promise((done) => setTimeout(done, 800));
+    try {
+      const response = await fetch(`/api${path}`, {
+        cache: "no-store",
+        ...init,
+      });
+      if (!TRANSIENT.has(response.status) || attempt === attempts - 1)
+        return response;
+    } catch (error) {
+      last = error;
+    }
   }
+  const changes = !!init?.method && init.method !== "GET";
+  throw new Error(
+    changes
+      ? "The connection dropped before ShelfSense confirmed this change. Refresh to see whether it was saved."
+      : "Cannot reach ShelfSense. Check that the web app is running.",
+    { cause: last },
+  );
+}
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     const message =
@@ -120,8 +142,6 @@ export const json = (data: unknown, method = "POST") => ({
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(data),
 });
-export const percent = (ratio: number | null | undefined) =>
-  ratio == null ? "—" : `${(ratio * 100).toFixed(1)}%`;
 export const date = (value: string | null | undefined) =>
   value
     ? new Date(value).toLocaleString([], {
@@ -138,15 +158,13 @@ export async function uploadImage<T>(
   operation: string,
   file: Blob,
   fields: Record<string, unknown> = {},
+  stocked?: Blob,
 ): Promise<T> {
-  const ticket = await api<{
-    storage: string;
-    ticket: string;
-    pathname: string;
-  }>("/uploads", json({ shelf_id: shelfId, operation }));
+  const ticket = await requestTicket(shelfId, operation);
   if (ticket.storage === "local") {
     const form = new FormData();
     form.append("file", file, "photo.png");
+    if (stocked) form.append("stocked", stocked, "stocked.png");
     for (const [key, value] of Object.entries(fields))
       form.append(
         key,
@@ -157,6 +175,24 @@ export async function uploadImage<T>(
       body: form,
     });
   }
+  await putBlob(ticket, file);
+  const stockedTicket = stocked
+    ? await requestTicket(shelfId, "stocked")
+    : undefined;
+  if (stocked && stockedTicket) await putBlob(stockedTicket, stocked);
+  return api<T>(
+    `/shelves/${shelfId}/${operation}`,
+    json({
+      ...fields,
+      upload_ticket: ticket.ticket,
+      ...(stockedTicket ? { stocked_ticket: stockedTicket.ticket } : {}),
+    }),
+  );
+}
+type UploadTicket = { storage: string; ticket: string; pathname: string };
+const requestTicket = (shelfId: string, operation: string) =>
+  api<UploadTicket>("/uploads", json({ shelf_id: shelfId, operation }));
+async function putBlob(ticket: UploadTicket, file: Blob) {
   const { upload } = await import("@vercel/blob/client");
   await upload(ticket.pathname, file, {
     access: "private",
@@ -164,8 +200,4 @@ export async function uploadImage<T>(
     clientPayload: ticket.ticket,
     contentType: file.type || "image/png",
   });
-  return api<T>(
-    `/shelves/${shelfId}/${operation}`,
-    json({ ...fields, upload_ticket: ticket.ticket }),
-  );
 }

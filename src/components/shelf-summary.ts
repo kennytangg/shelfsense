@@ -1,14 +1,8 @@
 import type { Shelf } from "./api-client";
 import { shelfPresentation } from "./shelf-presentation";
 
-export type ShelfView = "" | "restocking" | "verification" | "attention";
-export const SHELF_STATUSES = [
-  "Empty",
-  "Low",
-  "Full",
-  "Not checked",
-  "Needs setup",
-] as const;
+export type ShelfView = "" | "attention";
+export const SHELF_STATUSES = ["Empty", "Low", "Full"] as const;
 export type ShelfStatus = (typeof SHELF_STATUSES)[number];
 export type ShelfFilter = {
   view?: ShelfView;
@@ -17,7 +11,7 @@ export type ShelfFilter = {
 };
 
 export const isShelfView = (value: string | undefined): value is ShelfView =>
-  ["restocking", "verification", "attention"].includes(value ?? "");
+  value === "attention";
 export const isShelfStatus = (
   value: string | undefined,
 ): value is ShelfStatus =>
@@ -35,10 +29,6 @@ export function summarizeShelves(shelves: Shelf[]) {
     full: count("Full"),
     low: count("Low"),
     empty: count("Empty"),
-    notChecked: count("Not checked"),
-    needsSetup: count("Needs setup"),
-    restocking: shelves.filter((shelf) => !!shelf.active_alert).length,
-    verification: shelves.filter((shelf) => shelf.awaiting_verification).length,
     attention: shelves.filter(needsAttention).length,
   };
 }
@@ -46,9 +36,6 @@ export function summarizeShelves(shelves: Shelf[]) {
 export function filterShelves(shelves: Shelf[], filter: ShelfFilter) {
   const search = (filter.search ?? "").trim().toLowerCase();
   return shelves.filter((shelf) => {
-    if (filter.view === "restocking" && !shelf.active_alert) return false;
-    if (filter.view === "verification" && !shelf.awaiting_verification)
-      return false;
     if (filter.view === "attention" && !needsAttention(shelf)) return false;
     if (filter.status && badge(shelf) !== filter.status) return false;
     return (
@@ -65,7 +52,7 @@ const rank = (shelf: Shelf) => {
   const order: Record<string, number> = {
     Empty: 0,
     Low: 1,
-    "Not checked": 3,
+    "Not checked yet": 3,
     "Needs setup": 4,
     Full: 5,
   };

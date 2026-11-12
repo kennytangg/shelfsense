@@ -39,8 +39,9 @@ test.describe("Restock workflow", () => {
     expect(reported.resolution_reason).toBe("Staff reported restocked");
     expect((await api.get(shelf.id)).awaiting_verification).toBe(true);
 
-    // The dashboard lists it under "Restock reported" still showing Low.
-    await page.goto("/?view=verification");
+    // The dashboard still shows Low, with a Restock reported note, and it
+    // stays in the Alerts (attention) view.
+    await page.goto("/?view=attention");
     const card = page.getByRole("article", { name: "Restock shelf" });
     await expect(card.locator("[data-slot=badge]")).toHaveText("Low");
     await expect(

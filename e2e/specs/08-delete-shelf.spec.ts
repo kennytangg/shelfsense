@@ -12,11 +12,15 @@ test.describe("Delete shelf", () => {
     expect(await api.alertsFor(shelf.id)).toHaveLength(1);
 
     await page.goto(`/shelves/${shelf.id}`);
-    const trigger = page.getByRole("button", {
-      name: "Delete shelf",
-      exact: true,
-    });
-    await trigger.click();
+    // Delete lives in the "..." menu, not as a visible button.
+    await expect(
+      page.getByRole("button", { name: "Delete shelf", exact: true }),
+    ).toHaveCount(0);
+    const openDelete = async () => {
+      await page.getByRole("button", { name: "Shelf actions" }).click();
+      await page.getByRole("menuitem", { name: "Delete shelf" }).click();
+    };
+    await openDelete();
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText('Delete "Doomed shelf"?');
 
@@ -27,7 +31,7 @@ test.describe("Delete shelf", () => {
     expect((await request.get(`/api/shelves/${shelf.id}`)).status()).toBe(200);
 
     // Confirm deletes and returns to the dashboard.
-    await trigger.click();
+    await openDelete();
     await dialog
       .getByRole("button", { name: "Delete shelf", exact: true })
       .click();

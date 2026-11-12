@@ -4,7 +4,7 @@ import { checkHistory, checkStock } from "../support/ui";
 import { SHELF_IMAGES } from "../support/fixtures";
 
 test.describe("Shelf history", () => {
-  test("Check history lists checks newest first with status and coverage", async ({
+  test("Check history lists checks newest first with time and status only", async ({
     page,
     request,
   }) => {
@@ -29,10 +29,9 @@ test.describe("Shelf history", () => {
     await expect(rows.nth(0).locator("[data-slot=badge]")).toHaveText("Empty");
     await expect(rows.nth(1).locator("[data-slot=badge]")).toHaveText("Low");
     await expect(rows.nth(2).locator("[data-slot=badge]")).toHaveText("Full");
-    // Coverage is the share of the monitored area that is stocked.
-    await expect(rows.nth(0)).toContainText("Coverage 0.0%");
-    await expect(rows.nth(1)).toContainText(/Coverage 3\d\.\d%/);
-    await expect(rows.nth(2)).toContainText(/Coverage 7\d\.\d%/);
+    // No coverage column: just the date and the status badge.
+    await expect(history).not.toContainText("Coverage");
+    await expect(history).not.toContainText("%");
     // Each row carries a date and time.
     for (const row of await rows.all()) {
       await expect(row.locator("span").first()).not.toHaveText("");

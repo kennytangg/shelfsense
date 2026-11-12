@@ -8,6 +8,7 @@ import {
   type Connection,
   type Row,
 } from "./database";
+import { scaleThresholds } from "./stocked-thresholds";
 import { readImage, writeAsset, cleanup } from "./storage";
 import {
   decode,
@@ -20,11 +21,13 @@ import {
 import {
   HttpError,
   settingsSchema,
+  roiSchema,
   placementSchema,
   type ROI,
   type Settings,
   type PlacementSettings,
 } from "./validation";
+import { timed } from "./timing";
 export async function activeStore(c?: Connection) {
   const stores = await query(
     "SELECT * FROM stores ORDER BY created_at,id",
@@ -44,17 +47,24 @@ export async function activeStore(c?: Connection) {
     );
   return s;
 }
+/**
+ * One round trip: the shelf of the single active store, plus the store count so
+ * ambiguous ownership is still rejected. Falls back to activeStore() for the
+ * precise error when nothing matched.
+ */
 export async function getShelf(id: string, c?: Connection, lock = false) {
-  const store = await activeStore(c);
-  const s = (
-    await query(
-      `SELECT * FROM shelves WHERE id=$1 AND store_id=$2${lock ? " FOR UPDATE" : ""}`,
-      [id, store.id],
-      c,
-    )
-  )[0];
-  if (!s) throw new HttpError(404, "Shelf zone not found.");
-  return s;
+  const [row] = await query(
+    `SELECT s.*, (SELECT count(*) FROM stores)::int AS store_count FROM shelves s WHERE s.id=$1 AND s.store_id=(SELECT id FROM stores ORDER BY created_at,id LIMIT 1)${lock ? " FOR UPDATE OF s" : ""}`,
+    [id],
+    c,
+  );
+  if (!row) {
+    await activeStore(c);
+    throw new HttpError(404, "Shelf zone not found.");
+  }
+  const { store_count: stores, ...shelf } = row;
+  if (stores > 1) await activeStore(c);
+  return shelf;
 }
 export async function assetOut(id: string | null, c?: Connection) {
   if (!id) return null;
@@ -229,7 +239,6 @@ export async function deleteShelf(id: string) {
   });
 }
 export async function decodeUpload(id: string, bytes: Buffer) {
-  await getShelf(id);
   try {
     return await decode(bytes);
   } catch (e) {
@@ -250,12 +259,90 @@ export async function decodeUpload(id: string, bytes: Buffer) {
     throw e;
   }
 }
+const referenceCache = new Map<string, RGB>();
+const REFERENCE_CACHE_ENTRIES = 4;
+const REFERENCE_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+/** Reference assets are immutable, so decoded copies are safe to reuse per instance. */
+export async function loadReference(assetId: string, c?: Connection) {
+  const cached = referenceCache.get(assetId);
+  if (cached) return cached;
+  const a = (
+    await query(
+      "SELECT storage_key FROM image_assets WHERE id=$1",
+      [assetId],
+      c,
+    )
+  )[0];
+  if (!a) throw new HttpError(404, "Reference image not found.");
+  const image = await decode(await readImage(a.storage_key), true);
+  if (image.data.length <= REFERENCE_CACHE_MAX_BYTES) {
+    if (referenceCache.size >= REFERENCE_CACHE_ENTRIES)
+      referenceCache.delete(referenceCache.keys().next().value!);
+    referenceCache.set(assetId, image);
+  }
+  return image;
+}
+/** Decodes the optional stocked photo; failures never touch the shelf record. */
+export const decodeStocked = (bytes: Buffer) => decode(bytes);
+/** Settings scaled to a fully stocked photo of the same shelf. */
+async function stockedSettings(
+  empty: RGB,
+  stocked: RGB,
+  config: { roi: ROI; settings: Settings },
+): Promise<Settings> {
+  const result = await detect(empty, stocked, config.roi, config.settings);
+  if (result.outcome !== "Valid" || result.occupancy_ratio === null)
+    throw new HttpError(
+      422,
+      "Stocked photo unusable: " + result.warnings.join("; "),
+    );
+  return settingsSchema.parse({
+    ...config.settings,
+    ...scaleThresholds(result.occupancy_ratio),
+  });
+}
+const sameRoi = (a: ROI, b: ROI) =>
+  (["x", "y", "width", "height"] as const).every(
+    (k) => Math.abs(a[k] - b[k]) < 1e-9,
+  );
+/**
+ * Without a stocked photo, previously calibrated thresholds stay only when the
+ * reference photo (identical pixels) and monitored area are unchanged.
+ */
+async function carriedSettings(
+  previous: Row,
+  image: RGB,
+  config: { roi: ROI; settings: Settings },
+): Promise<Settings> {
+  const before = settingsSchema.parse(previous.settings);
+  if (before.stocked_coverage === null || !previous.roi) return config.settings;
+  if (!sameRoi(roiSchema.parse(previous.roi), config.roi))
+    return config.settings;
+  if (!previous.reference_image_id) return config.settings;
+  const old = await loadReference(previous.reference_image_id);
+  if (
+    old.width !== image.width ||
+    old.height !== image.height ||
+    !old.data.equals(image.data)
+  )
+    return config.settings;
+  return {
+    ...config.settings,
+    empty_threshold: before.empty_threshold,
+    full_threshold: before.full_threshold,
+    stocked_coverage: before.stocked_coverage,
+  };
+}
 export async function calibrate(
   id: string,
   image: RGB,
   config: { roi: ROI; settings: Settings },
   demo = false,
-  options: { uploadId?: string; expectedVersion?: number } = {},
+  options: {
+    uploadId?: string;
+    expectedVersion?: number;
+    stocked?: RGB;
+  } = {},
 ) {
   if (
     options.uploadId &&
@@ -275,12 +362,18 @@ export async function calibrate(
       422,
       "ROI must span at least 32 source pixels per side.",
     );
-  const result = await detect(image, image, config.roi, config.settings);
+  const result = await timed("detect", () =>
+    detect(image, image, config.roi, config.settings),
+  );
   if (result.outcome !== "Valid")
     throw new HttpError(
       422,
       "Reference unusable: " + result.warnings.join("; "),
     );
+  const previous = await getShelf(id);
+  const settings = options.stocked
+    ? await stockedSettings(image, options.stocked, config)
+    : await carriedSettings(previous, image, config);
   const keys: string[] = [];
   try {
     const asset = await writeAsset(
@@ -312,6 +405,8 @@ export async function calibrate(
         s.calibration_version !== options.expectedVersion
       )
         throw new HttpError(409, "Calibration changed; reload setup.");
+      if (s.reference_image_id !== previous.reference_image_id)
+        throw new HttpError(409, "Calibration changed; reload setup.");
       await insert("image_assets", asset, c);
       await update(
         "shelves",
@@ -320,7 +415,7 @@ export async function calibrate(
           reference_image_id: asset.id,
           placement_reference_image_id: null,
           roi: config.roi,
-          settings: config.settings,
+          settings,
           calibration_version: s.calibration_version + 1,
           latest_valid_analysis_id: null,
           last_error: null,
@@ -506,6 +601,14 @@ export async function analyze(
   image: RGB,
   options: AnalysisOptions = {},
 ) {
+  return (await analyzeWithStatus(id, image, options)).id;
+}
+/** Same as analyze, also reporting when a prior identical photo was reused. */
+export async function analyzeWithStatus(
+  id: string,
+  image: RGB,
+  options: AnalysisOptions = {},
+): Promise<{ id: string; duplicate: boolean }> {
   const s = await getShelf(id),
     version = s.calibration_version;
   if (
@@ -524,47 +627,44 @@ export async function analyze(
         )[0]
       : null;
   const existing = await receipt();
-  if (existing) return existing.analysis_id;
-  const load = async (assetId: string) => {
-    const a = (
-      await query("SELECT storage_key FROM image_assets WHERE id=$1", [assetId])
-    )[0];
-    return decode(await readImage(a.storage_key), true);
-  };
-  let result: Detection = {
-    outcome: "Needs setup",
-    classification: null,
-    occupancy_ratio: null,
-    warnings: ["Upload an empty reference and select an ROI first."],
-    duration_ms: 0,
-  };
-  let placement = null;
-  if (s.reference_image_id) {
-    const ref = await load(s.reference_image_id);
-    result = await detect(ref, image, s.roi, settingsSchema.parse(s.settings));
-    if (s.placement_reference_image_id && !options.stockOnly) {
-      const start = performance.now();
-      placement = await comparePlacement(
-        ref,
-        await load(s.placement_reference_image_id),
-        image,
-        s.roi,
-        settingsSchema.parse(s.settings),
-        placementSchema.parse(s.placement_settings),
-        result,
-      );
-      result.duration_ms += performance.now() - start;
-    }
-  }
+  if (existing) return { id: existing.analysis_id, duplicate: true };
   const keys: string[] = [];
+  // The input upload is independent of detection, so it overlaps with it.
+  const inputWrite = timed("write-input", () =>
+    writeAsset(id, image, "Input", options.demo ?? false, keys),
+  );
+  inputWrite.catch(() => {});
   try {
-    const input = await writeAsset(
-        id,
-        image,
-        "Input",
-        options.demo ?? false,
-        keys,
-      ),
+    let result: Detection = {
+      outcome: "Needs setup",
+      classification: null,
+      occupancy_ratio: null,
+      warnings: ["Upload an empty reference and select an ROI first."],
+      duration_ms: 0,
+    };
+    let placement = null;
+    if (s.reference_image_id) {
+      const ref = await timed("load-reference", () =>
+        loadReference(s.reference_image_id),
+      );
+      result = await timed("detect", () =>
+        detect(ref, image, s.roi, settingsSchema.parse(s.settings)),
+      );
+      if (s.placement_reference_image_id && !options.stockOnly) {
+        const start = performance.now();
+        placement = await comparePlacement(
+          ref,
+          await loadReference(s.placement_reference_image_id),
+          image,
+          s.roi,
+          settingsSchema.parse(s.settings),
+          placementSchema.parse(s.placement_settings),
+          result,
+        );
+        result.duration_ms += performance.now() - start;
+      }
+    }
+    const input = await inputWrite,
       overlay =
         !options.stockOnly && options.saveEvidence !== false && result.overlay
           ? await writeAsset(
@@ -586,121 +686,132 @@ export async function analyze(
             )
           : null;
     await options.beforePublish?.();
-    const published = await transaction(async (c) => {
-      const locked = await getShelf(id, c, true);
-      if (locked.calibration_version !== version)
-        throw new HttpError(
-          409,
-          "Calibration changed during processing. Submit a new image.",
-        );
-      const duplicate = await receipt(c);
-      if (duplicate) return { id: duplicate.analysis_id, duplicate: true };
-      for (const a of [input, overlay, mask])
-        if (a) await insert("image_assets", a, c);
-      const analysis = await insert(
-        "analyses",
-        {
-          id: randomUUID(),
-          shelf_id: id,
-          input_image_id: input.id,
-          reference_image_id: s.reference_image_id,
-          placement_reference_image_id: s.placement_reference_image_id,
-          placement_result: placement,
-          overlay_image_id: overlay?.id ?? null,
-          mask_image_id: mask?.id ?? null,
-          outcome: result.outcome,
-          classification: result.classification,
-          occupancy_ratio: result.occupancy_ratio,
-          warnings: result.warnings,
-          algorithm_version: ALGORITHM_VERSION,
-          calibration_version: version,
-          snapshot: {
-            roi: s.roi,
-            settings: s.settings,
-            placement_settings: s.placement_reference_image_id
-              ? s.placement_settings
-              : null,
-          },
-          duration_ms: result.duration_ms,
-          created_at: options.timestamp ?? new Date(),
-        },
-        c,
-      );
-      if (options.digest)
-        await insert(
-          "ingestion_receipts",
+    const published = await timed("publish-tx", () =>
+      transaction(async (c) => {
+        const locked = await getShelf(id, c, true);
+        if (locked.calibration_version !== version)
+          throw new HttpError(
+            409,
+            "Calibration changed during processing. Submit a new image.",
+          );
+        const duplicate = await receipt(c);
+        if (duplicate) return { id: duplicate.analysis_id, duplicate: true };
+        for (const a of [input, overlay, mask])
+          if (a) await insert("image_assets", a, c);
+        const analysis = await insert(
+          "analyses",
           {
+            id: randomUUID(),
             shelf_id: id,
+            input_image_id: input.id,
+            reference_image_id: s.reference_image_id,
+            placement_reference_image_id: s.placement_reference_image_id,
+            placement_result: placement,
+            overlay_image_id: overlay?.id ?? null,
+            mask_image_id: mask?.id ?? null,
+            outcome: result.outcome,
+            classification: result.classification,
+            occupancy_ratio: result.occupancy_ratio,
+            warnings: result.warnings,
+            algorithm_version: ALGORITHM_VERSION,
             calibration_version: version,
-            digest: options.digest,
-            analysis_id: analysis.id,
+            snapshot: {
+              roi: s.roi,
+              settings: s.settings,
+              placement_settings: s.placement_reference_image_id
+                ? s.placement_settings
+                : null,
+            },
+            duration_ms: result.duration_ms,
+            created_at: options.timestamp ?? new Date(),
           },
           c,
         );
-      await update(
-        "shelves",
-        id,
-        {
-          last_attempt_at: analysis.created_at,
-          last_error: result.warnings.join("; ") || null,
-          ...(result.outcome === "Valid"
-            ? { latest_valid_analysis_id: analysis.id }
-            : {}),
-          updated_at: new Date(),
-        },
-        c,
-      );
-      if (result.outcome === "Valid") await updateAlert(locked, analysis, c);
-      return { id: analysis.id, duplicate: false };
-    });
+        if (options.digest)
+          await insert(
+            "ingestion_receipts",
+            {
+              shelf_id: id,
+              calibration_version: version,
+              digest: options.digest,
+              analysis_id: analysis.id,
+            },
+            c,
+          );
+        await update(
+          "shelves",
+          id,
+          {
+            last_attempt_at: analysis.created_at,
+            last_error: result.warnings.join("; ") || null,
+            ...(result.outcome === "Valid"
+              ? { latest_valid_analysis_id: analysis.id }
+              : {}),
+            updated_at: new Date(),
+          },
+          c,
+        );
+        if (result.outcome === "Valid") await updateAlert(locked, analysis, c);
+        return { id: analysis.id, duplicate: false };
+      }),
+    );
     if (published.duplicate) await cleanup(keys);
-    return published.id;
+    return published;
   } catch (e) {
+    await inputWrite.catch(() => {});
     await cleanup(keys);
     throw e;
   }
 }
+/**
+ * Applies a staff action and returns the resulting task from the same
+ * transaction, so no follow-up read can fail after the write committed.
+ * Reporting restocked is idempotent: a retry or double submit gets the task
+ * that the first request already closed.
+ */
 export async function staffAction(id: string, action: string) {
-  await transaction(async (c) => {
-    const a = (await query("SELECT * FROM alerts WHERE id=$1", [id], c))[0];
-    if (!a) throw new HttpError(404, "Alert not found.");
-    const s = await getShelf(a.shelf_id, c, true);
-    const current = (
-      await query("SELECT * FROM alerts WHERE id=$1", [id], c)
-    )[0];
-    if (current.state === "Resolved")
-      throw new HttpError(
-        409,
-        "This task is already closed. Refresh to see the current task.",
-      );
-    const now = new Date();
-    if (action === "acknowledge")
-      await update(
-        "alerts",
-        id,
-        {
+  return transaction(async (c) => {
+    const task = async () => {
+      const a = (await query("SELECT * FROM alerts WHERE id=$1", [id], c))[0];
+      if (!a) throw new HttpError(404, "Alert not found.");
+      const s = await getShelf(a.shelf_id, c, true);
+      const current = (
+        await query("SELECT * FROM alerts WHERE id=$1", [id], c)
+      )[0];
+      if (
+        action === "report_restocked" &&
+        current.state === "Resolved" &&
+        current.resolution_reason === "Staff reported restocked"
+      )
+        return current;
+      if (current.state === "Resolved")
+        throw new HttpError(
+          409,
+          "This task is already closed. Refresh to see the current task.",
+        );
+      const now = new Date();
+      if (action === "acknowledge") {
+        const changes = {
           state: "Acknowledged",
           acknowledged_at: current.acknowledged_at ?? now,
-        },
-        c,
-      );
-    else {
-      await update(
-        "alerts",
-        id,
-        {
-          state: "Resolved",
-          resolution_reason: "Staff reported restocked",
-          resolved_at: now,
-        },
-        c,
-      );
+        };
+        await update("alerts", id, changes, c);
+        return { ...current, ...changes };
+      }
+      const changes = {
+        state: "Resolved",
+        resolution_reason: "Staff reported restocked",
+        resolved_at: now,
+      };
+      await update("alerts", id, changes, c);
       await update(
         "shelves",
         s.id,
         { reported_restocked_at: now, updated_at: now },
         c,
       );
-    }
+      return { ...current, ...changes };
+    };
+    return alertOut(await task(), c);
   });
 }

@@ -5,9 +5,10 @@ export default async function Page({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ setup?: string }>;
+  searchParams: Promise<{ setup?: string; duplicate?: string }>;
 }) {
   const { id } = await params;
-  if ((await searchParams).setup === "1") redirect(`/shelves/${id}/setup`);
-  return <ShelfDetail id={id} />;
+  const query = await searchParams;
+  if (query.setup === "1") redirect(`/shelves/${id}/setup`);
+  return <ShelfDetail id={id} duplicate={query.duplicate === "1"} />;
 }

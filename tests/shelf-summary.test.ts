@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import type { Shelf } from "../src/components/api-client";
 import {
   filterShelves,
+  isShelfStatus,
+  isShelfView,
   sortByUrgency,
   summarizeShelves,
 } from "../src/components/shelf-summary";
@@ -43,21 +45,15 @@ test("summarizeShelves counts stock states and tasks independently", () => {
     full: 1,
     low: 1,
     empty: 2,
-    notChecked: 1,
-    needsSetup: 1,
-    restocking: 2,
-    verification: 1,
     attention: 3,
   });
 });
 
-test("filterShelves combines task view, stock status and search", () => {
+test("filterShelves combines attention view, stock status and search", () => {
   const names = (list: Shelf[]) => list.map((s) => s.name);
-  assert.deepEqual(names(filterShelves(shelves, { view: "restocking" })), [
+  assert.deepEqual(names(filterShelves(shelves, { view: "attention" })), [
     "empty",
     "low",
-  ]);
-  assert.deepEqual(names(filterShelves(shelves, { view: "verification" })), [
     "waiting",
   ]);
   assert.deepEqual(names(filterShelves(shelves, { status: "Empty" })), [
@@ -66,9 +62,19 @@ test("filterShelves combines task view, stock status and search", () => {
   ]);
   assert.deepEqual(names(filterShelves(shelves, { search: " LOW " })), ["low"]);
   assert.deepEqual(
-    names(filterShelves(shelves, { view: "restocking", status: "Low" })),
+    names(filterShelves(shelves, { view: "attention", status: "Low" })),
     ["low"],
   );
+});
+
+test("only the attention view and stock statuses are valid URL filters", () => {
+  assert.equal(isShelfView("attention"), true);
+  for (const old of ["restocking", "verification", "", undefined])
+    assert.equal(isShelfView(old), false);
+  for (const status of ["Empty", "Low", "Full"])
+    assert.equal(isShelfStatus(status), true);
+  for (const old of ["Not checked", "Needs setup", undefined])
+    assert.equal(isShelfStatus(old), false);
 });
 
 test("sortByUrgency puts unresolved empty shelves first without mutating input", () => {

@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ROI, Shelf } from "./api-client";
 import { FilePicker } from "./image-upload";
-import { DetailsDialog } from "./details-dialog";
 import { Notice } from "./shelf-ui";
 
 export function CalibrationForm({
@@ -19,6 +18,7 @@ export function CalibrationForm({
 }) {
   const client = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
+  const [stocked, setStocked] = useState<File | null>(null);
   const [preview, setPreview] = useState(shelf.reference?.url || "");
   const [roi, setRoi] = useState<ROI>(
     shelf.roi || { x: 0, y: 0, width: 1, height: 1 },
@@ -40,9 +40,13 @@ export function CalibrationForm({
           return r.blob();
         }));
       if (!reference) throw new Error("Choose an empty reference image first.");
-      return uploadImage<Shelf>(shelf.id, "calibration", reference, {
-        config: { roi },
-      });
+      return uploadImage<Shelf>(
+        shelf.id,
+        "calibration",
+        reference,
+        { config: { roi } },
+        stocked ?? undefined,
+      );
     },
     onSuccess: async () => {
       await client.invalidateQueries();
@@ -63,16 +67,9 @@ export function CalibrationForm({
           role="region"
           className="workflow-panel min-w-0 gap-4 p-4 text-base leading-6 shadow-none"
         >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="min-w-0 text-lg font-bold leading-6">
-              Empty shelf reference
-            </h2>
-            <DetailsDialog title="Setup guidance">
-              Use an empty shelf as the baseline. Repeat setup if the camera
-              moves. Drag across the area to monitor, or focus the selection and
-              use arrow keys to move it; hold Shift to resize.
-            </DetailsDialog>
-          </div>
+          <h2 className="min-w-0 text-lg font-bold leading-6">
+            Empty shelf reference
+          </h2>
           <FilePicker
             existingPreview={shelf.reference?.url}
             file={file}
@@ -80,9 +77,28 @@ export function CalibrationForm({
             disabled={mutation.isPending}
             prompt="Choose an empty reference photo"
           />
-          <div className="flex flex-wrap items-center gap-2 text-base leading-6">
-            Choose an empty shelf photo, then mark the area to monitor.
-          </div>
+          <h3 className="text-base font-bold leading-6">
+            Fully stocked photo (recommended)
+          </h3>
+          <p className="text-sm leading-5 text-muted-foreground">
+            Helps ShelfSense know what full looks like for this shelf.
+          </p>
+          <FilePicker
+            file={stocked}
+            setFile={setStocked}
+            disabled={mutation.isPending}
+            prompt="Choose a fully stocked photo"
+            label="Fully stocked photo"
+          />
+          {stocked && (
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => setStocked(null)}
+            >
+              Remove stocked photo
+            </Button>
+          )}
         </Card>
         <Card
           role="region"
@@ -90,9 +106,7 @@ export function CalibrationForm({
         >
           <h2 className="text-lg font-bold leading-6">Area to monitor</h2>
           <p className="text-sm leading-5 text-muted-foreground">
-            This is the same reference photo. Drag to select the shelf area to
-            measure in future photos. The outlined area is monitored; the rest
-            is ignored. By default, the entire image is selected.
+            The whole photo is used unless you drag an outline around the shelf.
           </p>
           {!preview && <PhotoFrame>Upload an empty photo first.</PhotoFrame>}
           {preview && (
@@ -200,10 +214,6 @@ export function CalibrationForm({
           )}
         </Card>
         <div className="col-span-full flex flex-col items-start gap-4 text-sm [&>button]:max-sm:w-full">
-          <p className="text-muted-foreground">
-            Save your reference and selected area, then check a current shelf
-            photo.
-          </p>
           {shelf.calibration_version > 0 && (
             <Notice>
               Saving setup preserves history and requires a new shelf check.

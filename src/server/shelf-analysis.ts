@@ -8,7 +8,8 @@ import {
   type Settings,
   type PlacementSettings,
 } from "./validation";
-export const ALGORITHM_VERSION = "empty-reference-lab/1.0";
+import { estimateGain, removeGain } from "./exposure";
+export const ALGORITHM_VERSION = "empty-reference-lab/1.1";
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const MAX_PIXELS = 20_000_000;
 export type RGB = { data: Buffer; width: number; height: number };
@@ -152,9 +153,11 @@ export async function detect(
       cv.resize(region, out, new cv.Size(width, height), 0, 0, cv.INTER_AREA);
       return out;
     }
-    const a = crop(reference, ab),
+    const gain = estimateGain(reference, current, roi),
+      a = crop(reference, ab),
       b = crop(current, bb),
       gray = mat();
+    b.data.set(removeGain(b.data, gain));
     cv.cvtColor(b, gray, cv.COLOR_RGB2GRAY);
     let sum = 0,
       sq = 0;
@@ -173,11 +176,13 @@ export async function detect(
     cv.Laplacian(gray, lap, cv.CV_64F);
     sum = 0;
     sq = 0;
-    for (const v of lap.data64F) {
+    // Each `.data` access crosses the WASM boundary; read views once.
+    const lapData = lap.data64F;
+    for (const v of lapData) {
       sum += v;
       sq += v * v;
     }
-    if (sq / lap.data64F.length - (sum / lap.data64F.length) ** 2 < 2)
+    if (sq / lapData.length - (sum / lapData.length) ** 2 < 2)
       return review("Photo is too blurred. Hold the camera steady and retake.");
     const lab = (src: Mat) => {
       const blur = mat(),
@@ -191,11 +196,13 @@ export async function detect(
       raw = new Uint8Array(width * height),
       lights = new Uint32Array(511),
       chromas = new Uint32Array(130051);
+    const labA = la.data,
+      labB = lb.data;
     for (let p = 0; p < raw.length; p++) {
       const j = p * 3,
-        l = lb.data[j] - la.data[j],
-        u = lb.data[j + 1] - la.data[j + 1],
-        v = lb.data[j + 2] - la.data[j + 2];
+        l = labB[j] - labA[j],
+        u = labB[j + 1] - labA[j + 1],
+        v = labB[j + 2] - labA[j + 2];
       lights[l + 255]++;
       chromas[u * u + v * v]++;
       raw[p] = Math.hypot(l, u, v) >= settings.difference_threshold ? 255 : 0;
@@ -222,15 +229,17 @@ export async function detect(
       centroids = mat();
     cv.connectedComponentsWithStats(mask, labels, stats, centroids);
     let count = 0;
+    const labelData = labels.data32S,
+      statData = stats.data32S,
+      maskData = mask.data;
     for (let p = 0; p < raw.length; p++) {
-      const label = labels.data32S[p];
-      mask.data[p] =
+      const label = labelData[p];
+      maskData[p] =
         label > 0 &&
-        stats.data32S[label * 5 + cv.CC_STAT_AREA] >=
-          settings.min_component_pixels
+        statData[label * 5 + cv.CC_STAT_AREA] >= settings.min_component_pixels
           ? 255
           : 0;
-      if (mask.data[p]) count++;
+      if (maskData[p]) count++;
     }
     const out = Buffer.from(current.data),
       selected = mat();
@@ -242,10 +251,11 @@ export async function detect(
       0,
       cv.INTER_NEAREST,
     );
+    const selectedData = selected.data;
     for (let y = bb[1]; y < bb[3]; y++)
       for (let x = bb[0]; x < bb[2]; x++) {
         const j = (y * current.width + x) * 3;
-        if (selected.data[(y - bb[1]) * (bb[2] - bb[0]) + x - bb[0]])
+        if (selectedData[(y - bb[1]) * (bb[2] - bb[0]) + x - bb[0]])
           for (let c = 0; c < 3; c++)
             out[j + c] = Math.floor(
               out[j + c] * 0.55 + [20, 190, 155][c] * 0.45,
@@ -324,8 +334,10 @@ export async function comparePlacement(
     cv.erode(b, b, kernel);
     const shared = new Uint8Array(width * height);
     let count = 0;
+    const aData = a.data,
+      bData = b.data;
     for (let p = 0; p < shared.length; p++)
-      if (a.data[p] && b.data[p]) {
+      if (aData[p] && bData[p]) {
         shared[p] = 1;
         count++;
       }
@@ -354,14 +366,16 @@ export async function comparePlacement(
       lb = lab(current),
       mismatch = new Uint8Array(shared.length);
     let changed = 0;
+    const labA = la.data,
+      labB = lb.data;
     for (let p = 0; p < shared.length; p++) {
       const j = p * 3;
       if (
         shared[p] &&
         Math.hypot(
-          lb.data[j] - la.data[j],
-          lb.data[j + 1] - la.data[j + 1],
-          lb.data[j + 2] - la.data[j + 2],
+          labB[j] - labA[j],
+          labB[j + 1] - labA[j + 1],
+          labB[j + 2] - labA[j + 2],
         ) >= config.appearance_distance
       ) {
         mismatch[p] = 255;
@@ -382,9 +396,10 @@ export async function comparePlacement(
         0,
         cv.INTER_NEAREST,
       );
+      const selectedData = selected.data;
       for (let y = bd[1]; y < bd[3]; y++)
         for (let x = bd[0]; x < bd[2]; x++)
-          if (selected.data[(y - bd[1]) * (bd[2] - bd[0]) + x - bd[0]])
+          if (selectedData[(y - bd[1]) * (bd[2] - bd[0]) + x - bd[0]])
             for (let c = 0; c < 3; c++) {
               const j = (y * current.width + x) * 3 + c;
               stock.overlay.data[j] = Math.floor(

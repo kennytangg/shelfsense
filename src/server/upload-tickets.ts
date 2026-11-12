@@ -42,7 +42,7 @@ export async function uploadTicket(shelf: string, operation: string) {
   const snapshot = await getShelf(shelf);
   if (!process.env.BLOB_READ_WRITE_TOKEN)
     return { storage: "local", ticket: "", pathname: "" };
-  if (!["analyses", "calibration", "placement"].includes(operation))
+  if (!["analyses", "calibration", "placement", "stocked"].includes(operation))
     throw new HttpError(422, "Invalid upload operation.");
   const path = `uploads/${shelf}/${randomUUID()}`,
     payload = Buffer.from(
@@ -88,7 +88,6 @@ export async function uploadedBytes(
   const t = verifyTicket(ticket);
   if (t.shelf !== shelf || t.operation !== operation)
     throw new HttpError(422, "Upload does not belong to this operation.");
-  await getShelf(shelf);
   const result = await get(t.path, { access: "private", useCache: false });
   if (!result || !result.stream)
     throw new HttpError(422, "Upload not found. Choose the image again.");

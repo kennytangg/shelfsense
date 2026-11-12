@@ -106,8 +106,9 @@ test.describe("Bad input", () => {
       await expect(
         page.getByRole("heading", { name: "Previous valid result" }),
       ).toBeVisible();
+      // The red notice carries the specific reason, not a generic message.
       await expect(page.locator("main").getByRole("alert")).toContainText(
-        "Photo check needs attention.",
+        "Retake from the reference position",
       );
       await expect(resultBadge(page)).toHaveText("Low");
       const tasks = await api.alertsFor(shelf.id);

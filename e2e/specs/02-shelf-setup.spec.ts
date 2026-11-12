@@ -39,6 +39,20 @@ test.describe("Shelf setup", () => {
       }),
     ).toBeVisible();
     await selectFixtureArea(page);
+    // Optional fully stocked photo: shown with plain wording, removable.
+    await expect(
+      page.getByRole("heading", { name: "Fully stocked photo (recommended)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Helps ShelfSense know what full looks like"),
+    ).toBeVisible();
+    await page
+      .getByLabel("Fully stocked photo")
+      .setInputFiles(SHELF_IMAGES.full);
+    await expect(page.getByText("sh-01-full.png")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Remove stocked photo" }),
+    ).toBeVisible();
     await expect(save).toBeEnabled();
     await save.click();
 
@@ -53,13 +67,16 @@ test.describe("Shelf setup", () => {
 
     // The shelf has left "Needs setup".
     await page.goto(`/shelves/${id}`);
-    await expect(resultBadge(page)).toHaveText("Needs first check");
+    await expect(resultBadge(page)).toHaveText("Not checked yet");
     await page.goto("/");
-    await expect(card.locator("[data-slot=badge]")).toHaveText("Not checked");
+    await expect(card.locator("[data-slot=badge]")).toHaveText(
+      "Not checked yet",
+    );
+    // The summary has three tiles (Empty, Low, Full); there is no setup tile.
+    const summary = page.getByRole("list", { name: "Stock summary" });
+    await expect(summary.getByRole("link")).toHaveCount(3);
     await expect(
-      page
-        .getByRole("list", { name: "Stock summary" })
-        .getByRole("link", { name: /Needs setup/ }),
-    ).toContainText("0");
+      summary.getByRole("link", { name: /Needs setup/ }),
+    ).toHaveCount(0);
   });
 });

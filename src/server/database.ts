@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
 import { config } from "dotenv";
 import { resolve } from "node:path";
+import { queryCount } from "./timing";
 // Hosted environments supply DATABASE_URL directly.
 if (!process.env.VERCEL)
   config({ path: resolve(process.cwd(), ".env"), quiet: true });
@@ -14,9 +15,17 @@ export function pool() {
     globalDb.shelfPool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 5,
-      connectionTimeoutMillis: 3000,
+      // Serverless Postgres (Neon) may need several seconds to wake and complete TLS.
+      connectionTimeoutMillis: 10000,
+      keepAlive: true,
       idleTimeoutMillis: 10000,
       allowExitOnIdle: true,
+    });
+    // An idle client killed by the server (for example a suspended Neon
+    // compute) emits "error" on the pool; unhandled, it crashes the instance
+    // and drops in-flight requests. The pool discards the broken client.
+    globalDb.shelfPool.on("error", (error) => {
+      console.error("Idle PostgreSQL client error", error.message);
     });
   }
   return globalDb.shelfPool;
@@ -29,6 +38,7 @@ export async function query(
   values: unknown[] = [],
   connection?: Connection,
 ): Promise<Row[]> {
+  queryCount.value++;
   const parts = text.split(/\$(\d+)/g);
   const chunks = parts.map((part, i) =>
     i % 2 ? sql`${values[Number(part) - 1]}` : sql.raw(part),
@@ -48,7 +58,7 @@ export async function transaction<T>(
     await c.query("COMMIT");
     return result;
   } catch (e) {
-    await c.query("ROLLBACK");
+    await c.query("ROLLBACK").catch(() => {});
     throw e;
   } finally {
     c.release();

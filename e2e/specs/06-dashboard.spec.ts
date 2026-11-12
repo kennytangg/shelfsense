@@ -5,8 +5,8 @@ import { alertsBadge, checkStock, mainNavigation } from "../support/ui";
 import { SHELF_IMAGES } from "../support/fixtures";
 
 /**
- * Five shelves, one per stock state:
- * Empty, Low, Full, Not checked (set up, never checked), Needs setup.
+ * Five shelves, one per state: Empty, Low, Full, Not checked yet (set up,
+ * never checked) and Needs setup. Only Empty, Low and Full get summary tiles.
  */
 test.describe("Dashboard", () => {
   test.describe.configure({ mode: "serial" });
@@ -18,10 +18,6 @@ test.describe("Dashboard", () => {
     page
       .getByRole("list", { name: "Stock summary" })
       .getByRole("link", { name: new RegExp(`${label}$`) });
-  const tab = (page: Page, label: string) =>
-    page
-      .getByRole("navigation", { name: "Shelf tasks" })
-      .getByRole("link", { name: new RegExp(`^${label}`) });
   const cards = (page: Page) => page.getByRole("article");
   const cardNames = (page: Page) =>
     cards(page).getByRole("heading", { level: 2 });
@@ -42,21 +38,38 @@ test.describe("Dashboard", () => {
 
   test("summary tiles match the shelves that exist", async ({ page }) => {
     await page.goto("/");
-    const expected = {
-      Empty: 1,
-      Low: 1,
-      Full: 1,
-      "Not checked": 1,
-      "Needs setup": 1,
-    };
+    const expected = { Empty: 1, Low: 1, Full: 1 };
     for (const [label, count] of Object.entries(expected)) {
       await expect(tile(page, label)).toHaveText(`${count}${label}`);
     }
+    await expect(
+      page.getByRole("list", { name: "Stock summary" }).getByRole("link"),
+    ).toHaveCount(3);
     await expect(cards(page)).toHaveCount(5);
-    await expect(tab(page, "All")).toContainText("(5)");
-    await expect(tab(page, "Needs attention")).toContainText("(2)");
-    await expect(tab(page, "Needs restocking")).toContainText("(2)");
-    await expect(tab(page, "Restock reported")).toContainText("(0)");
+    // Under 8 shelves there is no search box, and no tabs or status dropdown.
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await expect(page.getByRole("combobox")).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Shelf tasks" }),
+    ).toHaveCount(0);
+  });
+
+  test("a card links to its shelf and has one action", async ({ page }) => {
+    await page.goto("/");
+    const card = page.getByRole("article", { name: "Mango drinks" });
+    await expect(
+      card.getByRole("link", { name: "Mango drinks" }),
+    ).toHaveAttribute("href", `/shelves/${low.id}`);
+    await expect(card.getByRole("link", { name: "View shelf" })).toHaveCount(0);
+    await expect(
+      card.getByRole("link", { name: "Restock shelf" }),
+    ).toBeVisible();
+    // The sentence that restated the badge is gone.
+    await expect(card.getByText("Stock is running low.")).toHaveCount(0);
+    const never = page.getByRole("article", { name: "Tea bags" });
+    await expect(never.locator("[data-slot=badge]")).toHaveText(
+      "Not checked yet",
+    );
   });
 
   test("most urgent shelf is listed first", async ({ page }) => {
@@ -82,47 +95,15 @@ test.describe("Dashboard", () => {
     await expect(cards(page)).toHaveCount(5);
   });
 
-  test("tabs filter by task", async ({ page }) => {
+  test("Alerts shows the attention view with a way back", async ({ page }) => {
     await page.goto("/");
-    await tab(page, "Needs restocking").click();
-    await expect(page).toHaveURL(/view=restocking/);
+    await mainNavigation(page)
+      .getByRole("link", { name: /^Alerts/ })
+      .click();
+    await expect(page).toHaveURL(/view=attention/);
     await expect(cardNames(page)).toHaveText(["Zebra snacks", "Mango drinks"]);
-    await tab(page, "Restock reported").click();
-    await expect(
-      page.getByText("No shelves match the current filters."),
-    ).toBeVisible();
-    await tab(page, "All").click();
-    await expect(cards(page)).toHaveCount(5);
-  });
-
-  test("search finds shelves by name and by location", async ({ page }) => {
-    await page.goto("/");
-    const search = page.getByRole("searchbox", { name: "Search shelves" });
-    await search.fill("mango");
-    await expect(cardNames(page)).toHaveText(["Mango drinks"]);
-    await search.fill("aisle");
-    await expect(cardNames(page)).toHaveText(["Tea bags", "Oat cereal"]);
-    await search.fill("bakery corner");
-    await expect(cardNames(page)).toHaveText(["Bread rack"]);
-    await search.fill("no such shelf");
-    await expect(
-      page.getByText("No shelves match the current filters."),
-    ).toBeVisible();
-    await search.fill("");
-    await expect(cards(page)).toHaveCount(5);
-  });
-
-  test("status dropdown filters", async ({ page }) => {
-    await page.goto("/");
-    const select = page.getByRole("combobox", {
-      name: "Filter by stock status",
-    });
-    await select.selectOption("Full");
-    await expect(page).toHaveURL(/status=Full/);
-    await expect(cardNames(page)).toHaveText(["Oat cereal"]);
-    await select.selectOption("Needs setup");
-    await expect(cardNames(page)).toHaveText(["Bread rack"]);
-    await select.selectOption("");
+    await page.getByRole("link", { name: "Back to all shelves" }).click();
+    await expect(page).toHaveURL("/");
     await expect(cards(page)).toHaveCount(5);
   });
 
@@ -146,21 +127,47 @@ test.describe("Dashboard", () => {
       page.getByText("Restock reported.", { exact: false }),
     ).toBeVisible();
     await expect(alertsBadge(page)).toHaveText(/^2/);
-    await page.goto("/");
-    await expect(tab(page, "Needs restocking")).toContainText("(1)");
-    await expect(tab(page, "Restock reported")).toContainText("(1)");
+    await page.goto("/?view=attention");
+    await expect(cardNames(page)).toHaveText(["Zebra snacks", "Mango drinks"]);
+    await expect(
+      page
+        .getByRole("article", { name: "Mango drinks" })
+        .getByText("Restock reported"),
+    ).toBeVisible();
 
     // A Full photo resolves the task; the badge drops to the one empty shelf.
     await checkStock(page, low.id, SHELF_IMAGES.full);
     await expect(alertsBadge(page)).toHaveText(/^1/);
-    await page.goto("/");
-    await expect(tab(page, "Needs attention")).toContainText("(1)");
-    await expect(tab(page, "Restock reported")).toContainText("(0)");
+    await page.goto("/?view=attention");
+    await expect(cardNames(page)).toHaveText(["Zebra snacks"]);
     await expect(tile(page, "Full")).toHaveText("2Full");
     await expect(tile(page, "Low")).toHaveText("0Low");
 
     // With the last task cleared the badge disappears.
     await checkStock(page, empty.id, SHELF_IMAGES.full);
     await expect(alertsBadge(page)).toHaveCount(0);
+  });
+
+  test("search appears at 8 shelves and finds by name and location", async ({
+    page,
+  }) => {
+    const spares = [];
+    for (const n of [1, 2, 3])
+      spares.push(await api.create(`Spare ${n}`, "Storeroom"));
+    await page.goto("/");
+    const search = page.getByRole("searchbox", { name: "Search shelves" });
+    await search.fill("mango");
+    await expect(cardNames(page)).toHaveText(["Mango drinks"]);
+    await search.fill("aisle");
+    await expect(cardNames(page)).toHaveText(["Tea bags", "Oat cereal"]);
+    await search.fill("bakery corner");
+    await expect(cardNames(page)).toHaveText(["Bread rack"]);
+    await search.fill("no such shelf");
+    await expect(
+      page.getByText("No shelves match the current filters."),
+    ).toBeVisible();
+    await search.fill("");
+    await expect(cards(page)).toHaveCount(8);
+    for (const spare of spares) await api.remove(spare.id);
   });
 });

@@ -6,8 +6,10 @@ import {
   PackageOpen,
   Boxes,
 } from "lucide-react";
+import { useEffect } from "react";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 export function Status({ status }: { status: string }) {
   const value = status;
@@ -69,6 +71,28 @@ export function Notice({
         {children}
       </AlertDescription>
     </Alert>
+  );
+}
+/** Plain load failure; the technical detail goes to the console, not the page. */
+export function LoadError({
+  what,
+  error,
+  onRetry,
+}: {
+  what: string;
+  error: Error;
+  onRetry: () => void;
+}) {
+  useEffect(() => {
+    console.error(`Could not load ${what}`, error);
+  }, [what, error]);
+  return (
+    <Notice error>
+      Could not load {what}. Try again.{" "}
+      <Button variant="outline" onClick={onRetry}>
+        Retry
+      </Button>
+    </Notice>
   );
 }
 export function Brand() {

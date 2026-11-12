@@ -68,9 +68,16 @@ export class ShelfApi {
     return shelf;
   }
 
-  async check(id: string, image: ImageName) {
+  async check(
+    id: string,
+    image: ImageName,
+    options: { ingestion?: boolean } = {},
+  ) {
     const response = await this.request.post(`/api/shelves/${id}/analyses`, {
-      multipart: { file: await imagePart(SHELF_IMAGES[image]) },
+      multipart: {
+        file: await imagePart(SHELF_IMAGES[image]),
+        ...(options.ingestion ? { ingestion: "true" } : {}),
+      },
     });
     expect(response.status()).toBe(201);
     return response.json();

@@ -192,6 +192,45 @@ integration(
   },
 );
 integration(
+  "repeating Report restocked (a retry or double submit) succeeds with the closed task",
+  async () => {
+    const id = await create();
+    await calibrate(id);
+    await upload(id, "low");
+    const alert = (await detail(id)).active_alert;
+    const send = () =>
+      request("/alerts/" + alert.id, "PATCH", { action: "report_restocked" });
+    const [first, second] = await Promise.all([send(), send()]);
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    const third = await send();
+    assert.equal(third.status, 200);
+    const body = await third.json();
+    assert.equal(body.id, alert.id);
+    assert.equal(body.state, "Resolved");
+    assert.equal(body.resolution_reason, "Staff reported restocked");
+    assert.equal((await detail(id)).awaiting_verification, true);
+  },
+);
+integration(
+  "a repeated photo reports duplicate: true and stores nothing new",
+  async () => {
+    const id = await create();
+    await calibrate(id);
+    const first = await upload(id, "low", "analyses", { ingestion: "true" });
+    assert.equal(first.status, 201);
+    assert.equal(first.data.duplicate, false);
+    const files = (await readdir(media)).length;
+    const again = await upload(id, "low", "analyses", { ingestion: "true" });
+    assert.equal(again.status, 201);
+    assert.equal(again.data.duplicate, true);
+    assert.equal(again.data.id, first.data.id);
+    assert.equal((await readdir(media)).length, files);
+    const other = await upload(id, "full", "analyses", { ingestion: "true" });
+    assert.equal(other.data.duplicate, false);
+  },
+);
+integration(
   "invalid and unreliable attempts retain previous findings and tasks",
   async () => {
     const id = await create();
@@ -517,6 +556,17 @@ integration(
         uploads.uploadedBytes(ticket.ticket, id, "calibration"),
         { status: 422 },
       );
+      // The hosted stocked-photo upload gets its own ticket, bound to the
+      // "stocked" operation so it cannot be replayed as the reference photo.
+      const stocked = await uploads.uploadTicket(id, "stocked");
+      assert.equal(stocked.storage, "blob");
+      assert.equal(uploads.verifyTicket(stocked.ticket).operation, "stocked");
+      assert.notEqual(stocked.pathname, ticket.pathname);
+      await assert.rejects(
+        uploads.uploadedBytes(stocked.ticket, id, "calibration"),
+        { status: 422 },
+      );
+      await assert.rejects(uploads.uploadTicket(id, "bogus"), { status: 422 });
     } finally {
       delete process.env.BLOB_READ_WRITE_TOKEN;
       delete process.env.UPLOAD_SIGNING_SECRET;
@@ -715,5 +765,77 @@ integration(
         "ALTER TABLE shelfsense_migrations_hidden RENAME TO shelfsense_migrations",
       );
     }
+  },
+);
+async function setup(
+  id: string,
+  options: { stocked?: string; reference?: string; roi?: object } = {},
+) {
+  const form = new FormData(),
+    blob = (name: string) =>
+      new Blob([new Uint8Array(images[name])], { type: "image/png" });
+  form.append("file", blob(options.reference ?? "reference"), "ref.png");
+  if (options.stocked) form.append("stocked", blob(options.stocked), "s.png");
+  form.append("config", JSON.stringify({ roi: options.roi ?? roi }));
+  const r = await request(`/shelves/${id}/calibration`, "POST", form);
+  return { status: r.status, data: await r.json() };
+}
+integration(
+  "setup with a stocked photo scales thresholds; without one keeps defaults",
+  async () => {
+    const plain = await create();
+    const a = await setup(plain);
+    assert.equal(a.status, 200);
+    assert.equal(a.data.settings.empty_threshold, 0.15);
+    assert.equal(a.data.settings.full_threshold, 0.6);
+    assert.equal(a.data.settings.stocked_coverage, null);
+    const scaled = await create();
+    const b = await setup(scaled, { stocked: "full" });
+    assert.equal(b.status, 200);
+    const f = b.data.settings.stocked_coverage;
+    assert.ok(f > 0.05 && f <= 1);
+    assert.ok(Math.abs(b.data.settings.full_threshold - 0.6 * f) < 1e-9);
+    assert.ok(Math.abs(b.data.settings.empty_threshold - 0.15 * f) < 1e-9);
+    assert.equal(b.data.calibration_version, 1);
+    const check = await upload(scaled, "low");
+    assert.equal(check.status, 201);
+    assert.equal(check.data.classification, "Low");
+  },
+);
+integration(
+  "setup rejects a stocked photo that matches the empty one or has wrong framing",
+  async () => {
+    const id = await create();
+    const files = (await readdir(media)).length;
+    const same = await setup(id, { stocked: "empty" });
+    assert.equal(same.status, 422);
+    assert.match(
+      same.data.detail ?? same.data.error ?? JSON.stringify(same.data),
+      /looks the same as the empty one/,
+    );
+    const framing = await setup(id, { stocked: "mismatched" });
+    assert.equal(framing.status, 422);
+    assert.equal((await detail(id)).calibration_version, 0);
+    assert.equal((await readdir(media)).length, files);
+  },
+);
+integration(
+  "re-setup without a stocked photo keeps calibrated thresholds only for the same photo and area",
+  async () => {
+    const id = await create();
+    const first = await setup(id, { stocked: "full" });
+    const kept = await setup(id);
+    assert.equal(kept.data.calibration_version, 2);
+    assert.equal(
+      kept.data.settings.full_threshold,
+      first.data.settings.full_threshold,
+    );
+    assert.equal(
+      kept.data.settings.stocked_coverage,
+      first.data.settings.stocked_coverage,
+    );
+    const moved = await setup(id, { roi: { x: 0, y: 0, width: 1, height: 1 } });
+    assert.equal(moved.data.settings.full_threshold, 0.6);
+    assert.equal(moved.data.settings.stocked_coverage, null);
   },
 );

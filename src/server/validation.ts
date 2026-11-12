@@ -11,14 +11,18 @@ export const roiSchema = z
     (r) => r.x + r.width <= 1.000001 && r.y + r.height <= 1.000001,
     "ROI must fit inside the image",
   );
+export const DEFAULT_EMPTY_THRESHOLD = 0.15;
+export const DEFAULT_FULL_THRESHOLD = 0.6;
 export const settingsSchema = z
   .object({
     difference_threshold: z.number().min(5).max(150).default(28),
     processing_width: z.number().int().min(128).max(1024).default(640),
     morphology_size: z.number().int().min(1).max(9).default(3),
     min_component_pixels: z.number().int().min(0).max(2000).default(40),
-    empty_threshold: z.number().gt(0).lt(1).default(0.15),
-    full_threshold: z.number().gt(0).lt(1).default(0.6),
+    empty_threshold: z.number().gt(0).lt(1).default(DEFAULT_EMPTY_THRESHOLD),
+    full_threshold: z.number().gt(0).lt(1).default(DEFAULT_FULL_THRESHOLD),
+    // Coverage of the fully stocked photo this shelf was calibrated from, if any.
+    stocked_coverage: z.number().gt(0).max(1).nullable().default(null),
   })
   .refine(
     (s) => s.empty_threshold < s.full_threshold && s.morphology_size % 2 === 1,

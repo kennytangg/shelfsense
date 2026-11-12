@@ -1,107 +1,48 @@
 "use client";
 import { Button } from "./ui/button";
-import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 import { shelfPresentation } from "./shelf-presentation";
 import Link from "next/link";
-import { Camera, ChevronRight, Layers, MapPin, Check } from "lucide-react";
+import { Camera, MapPin, Check } from "lucide-react";
 import type { Shelf } from "./api-client";
 
-export function Breadcrumbs({
-  items,
-}: {
-  items: { label: string; href?: string }[];
-}) {
-  return (
-    <nav className="breadcrumbs my-4 text-sm leading-5" aria-label="Breadcrumb">
-      <ol className="flex flex-wrap items-center gap-2">
-        <li className="flex min-w-0 items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon">
-                <Link href="/" aria-label="Shelves">
-                  <Layers size={20} aria-hidden="true" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Shelves</TooltipContent>
-          </Tooltip>
-        </li>
-        {items.map((item, index) => (
-          <li
-            key={index}
-            className="flex min-w-0 items-center gap-2 wrap-anywhere"
-          >
-            <ChevronRight className="shrink-0" size={16} aria-hidden="true" />
-            {item.href ? (
-              <Link href={item.href}>{item.label}</Link>
-            ) : (
-              <span aria-current="page">{item.label}</span>
-            )}
-          </li>
-        ))}
-      </ol>
-    </nav>
-  );
-}
 export function ShelfHeader({
   title,
-  breadcrumbLabel,
   shelf,
   children,
-  guidance,
 }: {
   title: string;
-  breadcrumbLabel?: string;
   shelf?: Shelf;
   children?: React.ReactNode;
-  guidance?: React.ReactNode;
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        <Breadcrumbs
-          items={[
-            ...(shelf && breadcrumbLabel
-              ? [{ label: shelf.name, href: `/shelves/${shelf.id}` }]
-              : []),
-            { label: breadcrumbLabel ?? shelf?.name ?? title },
-          ]}
-        />
-        <div className="flex items-center gap-2">
-          <h1 className="min-w-0 text-[1.75rem] leading-tight tracking-tight wrap-anywhere">
-            {title}
-          </h1>
-          {guidance}
-        </div>
+        <h1 className="min-w-0 text-[1.75rem] leading-tight tracking-tight wrap-anywhere">
+          {title}
+        </h1>
         {shelf && (
           <p className="mt-2 flex items-center gap-1 text-sm leading-5 text-muted-foreground wrap-anywhere">
             <MapPin className="shrink-0" size={14} aria-hidden="true" />{" "}
+            {shelf.name !== title && `${shelf.name} · `}
             {shelf.location}
             {shelf.demo ? " · Sample shelf" : ""}
           </p>
         )}
       </div>
       {children && (
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto [&>a:first-child]:max-sm:w-full">
+        <div className="flex w-full flex-wrap items-center gap-2 max-sm:justify-end sm:w-auto [&>a:first-child]:max-sm:flex-1">
           {children}
         </div>
       )}
     </header>
   );
 }
-export function ShelfAction({
-  shelf,
-  quiet = false,
-}: {
-  shelf: Shelf;
-  quiet?: boolean;
-}) {
+/** The same label and destination as the dashboard card for this shelf. */
+export function ShelfAction({ shelf }: { shelf: Shelf }) {
   const presentation = shelfPresentation(shelf);
   return (
-    <Button asChild variant={quiet ? "outline" : "default"}>
-      <Link
-        href={`/shelves/${shelf.id}/${shelf.reference ? "check" : "setup"}`}
-      >
+    <Button asChild>
+      <Link href={presentation.href}>
         <Camera className="size-4 shrink-0" aria-hidden="true" />
         {presentation.action}
       </Link>
@@ -109,13 +50,7 @@ export function ShelfAction({
   );
 }
 
-export function WorkflowProgress({
-  stage,
-}: {
-  stage: "add" | "setup" | "check";
-  shelf?: Shelf;
-}) {
-  if (stage === "check") return null;
+export function WorkflowProgress({ stage }: { stage: "add" | "setup" }) {
   const current = stage === "add" ? 0 : 1;
   return (
     <nav

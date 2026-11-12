@@ -17,3 +17,27 @@ test("other constraint violations remain conflicts", async () => {
   );
   assert.equal(response.status, 409);
 });
+
+test("database connection failures map to a retryable 503 JSON response", async () => {
+  const cases = [
+    new Error("timeout exceeded when trying to connect"),
+    Object.assign(new Error("Failed query"), {
+      cause: new Error("Connection terminated unexpectedly"),
+    }),
+    Object.assign(new Error("Failed query"), {
+      cause: Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+    }),
+  ];
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    for (const error of cases) {
+      const response = errorResponse(error);
+      assert.equal(response.status, 503);
+      assert.match((await response.json()).detail, /unavailable/);
+    }
+    assert.equal(errorResponse(new Error("boom")).status, 500);
+  } finally {
+    console.error = quiet;
+  }
+});

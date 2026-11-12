@@ -1,6 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { Analysis, api, date, percent } from "./api-client";
+import { Analysis, api, date } from "./api-client";
 import { Card } from "./ui/card";
 import { Status } from "./shelf-ui";
 
@@ -28,11 +28,10 @@ export function ShelfHistory({ shelfId }: { shelfId: string }) {
             {analysis.classification ? (
               <Status status={analysis.classification} />
             ) : (
-              <span className="text-muted-foreground">{analysis.outcome}</span>
+              <span className="text-muted-foreground">
+                Photo could not be checked
+              </span>
             )}
-            <span className="tabular-nums text-muted-foreground">
-              Coverage {percent(analysis.occupancy_ratio)}
-            </span>
           </li>
         ))}
       </ol>

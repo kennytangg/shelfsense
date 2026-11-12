@@ -75,3 +75,33 @@ export async function checkStock(page: Page, id: string, file: string) {
   await submitCheck(page, id, file);
   await expect(page).toHaveURL(new RegExp(`/shelves/${id}$`));
 }
+
+/**
+ * Drag the monitored area with the mouse so it covers `area` (fractions of the
+ * image). Starts from the current preview image, so call it after the
+ * reference photo has been chosen.
+ */
+export async function dragMonitoredArea(
+  page: Page,
+  area: { x: number; y: number; width: number; height: number },
+) {
+  const image = page.getByRole("img", {
+    name: "Setup reference; draw the measurement region",
+  });
+  await expect(image).toBeVisible();
+  const box = await image.boundingBox();
+  if (!box) throw new Error("The reference preview has no size.");
+  const at = (fx: number, fy: number) => ({
+    x: box.x + box.width * fx,
+    y: box.y + box.height * fy,
+  });
+  const start = at(area.x, area.y);
+  const end = at(area.x + area.width, area.y + area.height);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move((start.x + end.x) / 2, (start.y + end.y) / 2, {
+    steps: 5,
+  });
+  await page.mouse.move(end.x, end.y, { steps: 5 });
+  await page.mouse.up();
+}

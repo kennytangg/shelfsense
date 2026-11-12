@@ -9,7 +9,9 @@ export function shelfPresentation(shelf: Shelf) {
       shelf.latest_attempt.outcome !== "Valid" &&
       shelf.latest_attempt.id !== shelf.current?.id)
   );
-  const badge = !shelf.reference ? "Needs setup" : measurement || "Not checked";
+  const badge = !shelf.reference
+    ? "Needs setup"
+    : measurement || "Not checked yet";
   const action = !shelf.reference
     ? "Set up shelf"
     : shelf.awaiting_verification

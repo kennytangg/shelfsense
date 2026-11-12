@@ -8,8 +8,8 @@ const photos = (name: string) =>
 
 /**
  * Frozen illustrated shelf set from the repository (CC0). One shelf, same
- * viewpoint: reference (empty), low and full. See e2e/fixtures/photos/SOURCES.md
- * for why these are not real photographs.
+ * viewpoint: reference (empty), low and full. They are drawings, not real
+ * photographs (see docs/e2e-test-log.md, "Photos used").
  */
 export const SHELF_IMAGES = {
   empty: shelves("sh-01-reference.png"),

@@ -12,6 +12,7 @@ import {
 } from "./validation";
 import { decode, MAX_BYTES } from "./shelf-analysis";
 import { uploadTicket, uploadedBytes, blobUpload } from "./upload-tickets";
+import { timed } from "./timing";
 import { pendingMigrations } from "./migration-versions";
 import type { HandleUploadBody } from "@vercel/blob/client";
 const json = (data: unknown, status = 200) =>
@@ -27,9 +28,23 @@ async function imageRequest(request: Request, id: string, op: string) {
   if (request.headers.get("content-type")?.includes("application/json")) {
     const payload = await body(request),
       token = z.string().parse(payload.upload_ticket);
-    const uploaded = await uploadedBytes(token, id, op);
+    const uploaded = await timed("blob-read", () =>
+      uploadedBytes(token, id, op),
+    );
+    let stocked;
+    try {
+      stocked =
+        id && op === "calibration" && typeof payload.stocked_ticket === "string"
+          ? await uploadedBytes(payload.stocked_ticket, id, "stocked")
+          : undefined;
+    } catch (error) {
+      // Never leave the already uploaded reference photo behind.
+      await uploaded.remove().catch(() => {});
+      throw error;
+    }
     return {
       ...uploaded,
+      stocked,
       config: payload.config,
       version: payload.calibration_version,
       deduplicate: true,
@@ -39,7 +54,7 @@ async function imageRequest(request: Request, id: string, op: string) {
   if (process.env.VERCEL)
     throw new HttpError(422, "Use a direct image upload before processing.");
   const size = Number(request.headers.get("content-length") ?? 0);
-  if (size > MAX_BYTES + 1024 * 1024)
+  if (size > 2 * MAX_BYTES + 1024 * 1024)
     throw new HttpError(
       413,
       "Image exceeds 10 MB. Choose a smaller PNG or JPEG.",
@@ -59,6 +74,9 @@ async function imageRequest(request: Request, id: string, op: string) {
   } catch {
     throw new HttpError(422, "Invalid image settings.");
   }
+  const stockedFile = op === "calibration" ? form.get("stocked") : null;
+  if (stockedFile !== null && !(stockedFile instanceof File))
+    throw new HttpError(422, "Choose a stocked photo image.");
   // decodeUpload records failures while preserving the previous measured reading.
   return {
     bytes:
@@ -66,6 +84,15 @@ async function imageRequest(request: Request, id: string, op: string) {
         ? Buffer.alloc(MAX_BYTES + 1)
         : Buffer.from(await file.arrayBuffer()),
     uploadId: undefined,
+    stocked: stockedFile
+      ? {
+          bytes:
+            stockedFile.size > MAX_BYTES
+              ? Buffer.alloc(MAX_BYTES + 1)
+              : Buffer.from(await stockedFile.arrayBuffer()),
+          remove: async () => {},
+        }
+      : undefined,
     config,
     version: Number(form.get("calibration_version")),
     remove: async () => {},
@@ -203,7 +230,13 @@ async function dispatch(request: Request) {
               op === "placement"
                 ? z.number().int().min(0).parse(upload.version)
                 : undefined;
-            const image = await service.decodeUpload(id, upload.bytes);
+            const image = await timed("decode", () =>
+              service.decodeUpload(id, upload.bytes),
+            );
+            const stocked =
+              op === "calibration" && upload.stocked
+                ? await service.decodeStocked(upload.stocked.bytes)
+                : undefined;
             if (op === "calibration")
               await service.calibrate(
                 id,
@@ -213,6 +246,7 @@ async function dispatch(request: Request) {
                 {
                   uploadId: upload.uploadId,
                   expectedVersion: upload.expectedVersion,
+                  stocked,
                 },
               );
             else if (op === "placement")
@@ -225,31 +259,37 @@ async function dispatch(request: Request) {
                 upload.uploadId,
               );
             else {
-              const analysisId = await service.analyze(id, image, {
-                saveEvidence: false,
-                digest: upload.deduplicate
-                  ? createHash("sha256").update(upload.bytes).digest("hex")
-                  : undefined,
-                expectedVersion:
-                  upload.expectedVersion === undefined
-                    ? undefined
-                    : z.number().int().min(0).parse(upload.expectedVersion),
-              });
+              const outcome = await timed("analyze", () =>
+                service.analyzeWithStatus(id, image, {
+                  saveEvidence: false,
+                  digest: upload.deduplicate
+                    ? createHash("sha256").update(upload.bytes).digest("hex")
+                    : undefined,
+                  expectedVersion:
+                    upload.expectedVersion === undefined
+                      ? undefined
+                      : z.number().int().min(0).parse(upload.expectedVersion),
+                }),
+              );
               succeeded = true;
               return json(
-                await service.analysisOut(
-                  (
-                    await query("SELECT * FROM analyses WHERE id=$1", [
-                      analysisId,
-                    ])
-                  )[0],
-                ),
+                {
+                  ...(await service.analysisOut(
+                    (
+                      await query("SELECT * FROM analyses WHERE id=$1", [
+                        outcome.id,
+                      ])
+                    )[0],
+                  )),
+                  duplicate: outcome.duplicate,
+                },
                 201,
               );
             }
             succeeded = true;
             return json(await service.shelfOut(await service.getShelf(id)));
           } finally {
+            await upload.stocked?.remove().catch(() => {});
             if (!succeeded) await upload.remove();
           }
         }
@@ -282,12 +322,7 @@ async function dispatch(request: Request) {
         const action = z
           .enum(["acknowledge", "report_restocked"])
           .parse((await body(request)).action);
-        await service.staffAction(parts[1], action);
-        return json(
-          await service.alertOut(
-            (await query("SELECT * FROM alerts WHERE id=$1", [parts[1]]))[0],
-          ),
-        );
+        return json(await service.staffAction(parts[1], action));
       }
     }
     throw new HttpError(404, "Route not found.");
@@ -327,9 +362,18 @@ export function errorResponse(e: unknown) {
       409,
     );
   }
+  const message = e instanceof Error ? e.message : "";
   if (
     code?.startsWith("08") ||
-    ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "57P01"].includes(code ?? "")
+    ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "ECONNRESET", "57P01"].includes(
+      code ?? "",
+    ) ||
+    /timeout exceeded when trying to connect|Connection terminated/i.test(
+      message,
+    ) ||
+    /timeout exceeded when trying to connect|Connection terminated/i.test(
+      String((e as { cause?: { message?: string } }).cause?.message ?? ""),
+    )
   )
     return json(
       { detail: "PostgreSQL is unavailable. Start the database and retry." },
@@ -355,7 +399,9 @@ export async function handle(request: Request) {
         new URL(request.url).pathname,
       );
     return imageOperation
-      ? await withImageProcessing(() => dispatch(request))
+      ? await timed("image-request", () =>
+          withImageProcessing(() => dispatch(request)),
+        )
       : await dispatch(request);
   } catch (e) {
     return errorResponse(e);

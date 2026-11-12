@@ -1,5 +1,6 @@
 "use client";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { DeleteShelf } from "./delete-shelf";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -13,12 +14,33 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, json, Shelf, date } from "./api-client";
 import { ShelfHeader, ShelfAction } from "./workflow-navigation";
-import { DetailsDialog } from "./details-dialog";
 import { ShelfPageSkeleton } from "./shelf-skeleton";
-import { Notice, Status } from "./shelf-ui";
+import { LoadError, Notice, Status } from "./shelf-ui";
+import { shelfPresentation } from "./shelf-presentation";
 import { ShelfHistory } from "./shelf-history";
-export function ShelfDetail({ id }: { id: string }) {
+
+const GENERIC_PHOTO_FAILURE =
+  "The latest photo could not be checked. Retake it from the reference position with matching framing and lighting.";
+
+/** The specific reasons the latest photo was not accepted, without repeats. */
+const failureReasons = (shelf: Shelf) => [
+  ...new Set(
+    [shelf.last_error, ...(shelf.latest_attempt?.warnings || [])].filter(
+      (reason): reason is string => !!reason,
+    ),
+  ),
+];
+
+export function ShelfDetail({
+  id,
+  duplicate = false,
+}: {
+  id: string;
+  duplicate?: boolean;
+}) {
   const client = useQueryClient();
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const query = useQuery({
     queryKey: ["shelf", id],
     queryFn: () => api<Shelf>(`/shelves/${id}`),
@@ -32,48 +54,32 @@ export function ShelfDetail({ id }: { id: string }) {
     onSettled: () => client.invalidateQueries(),
   });
   const shelf = query.data;
+  // A shelf that needs restocking has one action: "Report restocked" below.
+  const needsRestockReport =
+    !!shelf?.active_alert && !shelf.awaiting_verification;
+  const failed = shelf ? !!shelfPresentation(shelf).exception : false;
   return (
     <>
       {query.isPending && <ShelfPageSkeleton />}
       {query.isError && (
-        <Notice error>
-          {query.error.message}{" "}
-          <Button variant="outline" onClick={() => query.refetch()}>
-            Retry
-          </Button>
-        </Notice>
+        <LoadError
+          what="this shelf"
+          error={query.error}
+          onRetry={() => query.refetch()}
+        />
       )}
       {shelf && (
         <>
-          <ShelfHeader
-            title={shelf.name}
-            shelf={shelf}
-            guidance={
-              <DetailsDialog title="Shelf guide and details">
-                <p>Last valid check: {date(shelf.current?.created_at)}</p>
-                <p>Restock reported: {date(shelf.reported_restocked_at)}</p>
-                <p>
-                  Report restocked after refilling the shelf. The stock estimate
-                  updates when you check another photo.
-                </p>
-                {[
-                  ...new Set(
-                    [
-                      shelf.last_error,
-                      ...(shelf.latest_attempt?.warnings || []),
-                    ].filter(Boolean),
-                  ),
-                ].map((reason) => (
-                  <p key={reason}>{reason}</p>
-                ))}
-              </DetailsDialog>
-            }
-          >
-            <ShelfAction shelf={shelf} />
-            <DeleteShelf shelf={shelf} redirect />
+          <ShelfHeader title={shelf.name} shelf={shelf}>
+            {!needsRestockReport && <ShelfAction shelf={shelf} />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Shelf actions">
+                <Button
+                  ref={menuTrigger}
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Shelf actions"
+                >
                   <MoreHorizontal className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -81,30 +87,81 @@ export function ShelfDetail({ id }: { id: string }) {
                 <DropdownMenuItem asChild>
                   <Link href={`/shelves/${id}/setup`}>Change setup</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setConfirmDelete(true)}
+                >
+                  <Trash2 aria-hidden="true" /> Delete shelf
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </ShelfHeader>
+          <DeleteShelf
+            shelf={shelf}
+            redirect
+            open={confirmDelete}
+            onOpenChange={setConfirmDelete}
+            returnFocus={menuTrigger}
+          />
+          {duplicate && (
+            <Notice variant="success">
+              This photo was already checked. Showing the earlier result.
+            </Notice>
+          )}
+          {failed && (
+            <Notice error>
+              {failureReasons(shelf).join(" ") || GENERIC_PHOTO_FAILURE}
+            </Notice>
+          )}
+          {(shelf.active_alert || shelf.awaiting_verification) && (
+            <section
+              className="my-6 flex flex-wrap items-center gap-4"
+              id="restocking"
+            >
+              {shelf.awaiting_verification ? (
+                <p>
+                  Restock reported. Check stock with a new photo to update the
+                  result.
+                </p>
+              ) : (
+                <>
+                  <p>This shelf needs restocking.</p>
+                  <Button
+                    disabled={report.isPending}
+                    onClick={() => report.mutate()}
+                  >
+                    {report.isPending ? "Saving…" : "Report restocked"}
+                  </Button>
+                </>
+              )}
+              {report.isError && <Notice error>{report.error.message}</Notice>}
+            </section>
+          )}
           <Card
             role="region"
             className="my-6 gap-4 p-4 text-base leading-6 shadow-none"
           >
             <div className="flex flex-col items-start justify-between gap-3 min-[400px]:flex-row">
-              <h2 className="text-lg font-bold leading-6">
-                {shelf.last_error ||
-                (shelf.latest_attempt &&
-                  shelf.latest_attempt.outcome !== "Valid" &&
-                  shelf.latest_attempt.id !== shelf.current?.id)
-                  ? shelf.current
-                    ? "Previous valid result"
-                    : "No valid result"
-                  : "Latest result"}
-              </h2>
+              <div>
+                <h2 className="text-lg font-bold leading-6">
+                  {failed
+                    ? shelf.current
+                      ? "Previous valid result"
+                      : "No valid result"
+                    : "Latest result"}
+                </h2>
+                {shelf.current && (
+                  <p className="text-sm leading-5 text-muted-foreground">
+                    Last checked {date(shelf.current.created_at)}
+                  </p>
+                )}
+              </div>
               <Status
                 status={
                   shelf.current
                     ? shelf.current.classification || shelf.status
                     : shelf.reference
-                      ? "Needs first check"
+                      ? "Not checked yet"
                       : "Needs setup"
                 }
               />
@@ -124,41 +181,6 @@ export function ShelfDetail({ id }: { id: string }) {
               </p>
             )}
           </Card>
-          {(shelf.last_error ||
-            (shelf.latest_attempt &&
-              shelf.latest_attempt.outcome !== "Valid" &&
-              shelf.latest_attempt.id !== shelf.current?.id)) && (
-            <Notice error>
-              Photo check needs attention. Retake from the reference position
-              with matching framing and lighting.
-            </Notice>
-          )}
-          {(shelf.active_alert || shelf.awaiting_verification) && (
-            <section
-              className="my-6 flex flex-wrap items-center gap-4"
-              id="restocking"
-            >
-              {shelf.awaiting_verification ? (
-                <>
-                  <p>
-                    Restock reported. Check stock with a new photo to update the
-                    result.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>This shelf needs restocking.</p>
-                  <Button
-                    disabled={report.isPending}
-                    onClick={() => report.mutate()}
-                  >
-                    {report.isPending ? "Saving…" : "Report restocked"}
-                  </Button>
-                </>
-              )}
-              {report.isError && <Notice error>{report.error.message}</Notice>}
-            </section>
-          )}
           <ShelfHistory shelfId={id} />
         </>
       )}

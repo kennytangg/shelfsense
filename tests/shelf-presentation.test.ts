@@ -84,11 +84,23 @@ test("missing current result is never replaced by stale shelf status", () => {
         last_error: "review",
       }),
     );
-    assert.equal(presentation.badge, "Not checked");
+    assert.equal(presentation.badge, "Not checked yet");
     assert.equal(
       presentation.action,
       awaiting_verification ? "Verify restock" : "Check stock",
     );
     assert.equal(presentation.exception, "Photo needs review");
+  }
+});
+test("every state has one action label and destination", () => {
+  const cases: [Partial<Shelf>, string, string][] = [
+    [{ reference: null }, "Set up shelf", "/shelves/test/setup"],
+    [{}, "Check stock", "/shelves/test/check"],
+    [{ awaiting_verification: true }, "Verify restock", "/shelves/test/check"],
+  ];
+  for (const [fields, action, href] of cases) {
+    const presentation = shelfPresentation(shelf(fields));
+    assert.equal(presentation.action, action);
+    assert.equal(presentation.href, href);
   }
 });
