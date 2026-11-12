@@ -60,24 +60,35 @@ export async function uploadTicket(shelf: string, operation: string) {
     storage: process.env.BLOB_READ_WRITE_TOKEN ? "blob" : "local",
   };
 }
+/**
+ * Token options for a direct upload. The pathname is a single-use random
+ * ticket path, so overwriting is safe and required: the Blob SDK retries a
+ * request whose response was lost (5xx or network error) with backoff, and
+ * when the first attempt had actually stored the object, the retry fails with
+ * "This blob already exists" after roughly 20 s even though the upload worked.
+ */
+export async function uploadTokenOptions(
+  pathname: string,
+  payload: string | null,
+) {
+  const t = verifyTicket(payload ?? "");
+  await getShelf(t.shelf);
+  if (pathname !== t.path)
+    throw new HttpError(422, "Upload does not belong to this shelf.");
+  return {
+    allowedContentTypes: ["image/png", "image/jpeg"],
+    maximumSizeInBytes: MAX_BYTES,
+    validUntil: t.expires,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    tokenPayload: payload,
+  };
+}
 export async function blobUpload(request: Request, body: HandleUploadBody) {
   return handleUpload({
     request,
     body,
-    onBeforeGenerateToken: async (pathname, payload) => {
-      const t = verifyTicket(payload ?? "");
-      await getShelf(t.shelf);
-      if (pathname !== t.path)
-        throw new HttpError(422, "Upload does not belong to this shelf.");
-      return {
-        allowedContentTypes: ["image/png", "image/jpeg"],
-        maximumSizeInBytes: MAX_BYTES,
-        validUntil: t.expires,
-        addRandomSuffix: false,
-        allowOverwrite: false,
-        tokenPayload: payload,
-      };
-    },
+    onBeforeGenerateToken: uploadTokenOptions,
   });
 }
 export async function uploadedBytes(

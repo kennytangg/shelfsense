@@ -2,6 +2,7 @@ import "server-only";
 import { withImageProcessing } from "./image-queue";
 import { z, ZodError } from "zod";
 import { createHash } from "node:crypto";
+import { after } from "next/server";
 import * as service from "./shelves";
 import { query } from "./database";
 import {
@@ -24,24 +25,58 @@ async function body(request: Request) {
     throw new HttpError(422, "Invalid JSON request.");
   }
 }
+/** Runs non-critical work after the response; inline outside a Next request. */
+function deferred(work: () => Promise<void>) {
+  try {
+    after(work);
+  } catch {
+    void work();
+  }
+}
+type TempUpload = { remove: () => Promise<unknown> };
+/**
+ * Deletes the temporary client-upload blobs once the server has read the bytes
+ * and handled the request (success, duplicate or handled failure). Dedup keys
+ * on the stored original-byte digest, never on the temp blob.
+ */
+export function releaseTempUploads(
+  upload: TempUpload & { stocked?: TempUpload },
+  run: (work: () => Promise<void>) => void = deferred,
+) {
+  run(async () => {
+    await upload.stocked?.remove().catch(() => {});
+    await upload.remove().catch(() => {});
+  });
+}
 async function imageRequest(request: Request, id: string, op: string) {
   if (request.headers.get("content-type")?.includes("application/json")) {
     const payload = await body(request),
       token = z.string().parse(payload.upload_ticket);
-    const uploaded = await timed("blob-read", () =>
-      uploadedBytes(token, id, op),
+    const stockedToken =
+      id && op === "calibration" && typeof payload.stocked_ticket === "string"
+        ? payload.stocked_ticket
+        : undefined;
+    // The two blob downloads are independent, so they run concurrently.
+    const [first, second] = await timed("blob-read", () =>
+      Promise.allSettled([
+        uploadedBytes(token, id, op),
+        stockedToken
+          ? uploadedBytes(stockedToken, id, "stocked")
+          : Promise.resolve(undefined),
+      ]),
     );
-    let stocked;
-    try {
-      stocked =
-        id && op === "calibration" && typeof payload.stocked_ticket === "string"
-          ? await uploadedBytes(payload.stocked_ticket, id, "stocked")
-          : undefined;
-    } catch (error) {
-      // Never leave the already uploaded reference photo behind.
-      await uploaded.remove().catch(() => {});
-      throw error;
+    if (first.status === "rejected" || second.status === "rejected") {
+      // Never leave an already uploaded photo behind.
+      if (first.status === "fulfilled")
+        await first.value.remove().catch(() => {});
+      if (second.status === "fulfilled")
+        await second.value?.remove().catch(() => {});
+      throw first.status === "rejected"
+        ? first.reason
+        : (second as PromiseRejectedResult).reason;
     }
+    const uploaded = first.value,
+      stocked = second.value;
     return {
       ...uploaded,
       stocked,
@@ -218,7 +253,6 @@ async function dispatch(request: Request) {
           method === "POST"
         ) {
           const upload = await imageRequest(request, id, op);
-          let succeeded = false;
           try {
             const config =
               op === "calibration"
@@ -230,13 +264,14 @@ async function dispatch(request: Request) {
               op === "placement"
                 ? z.number().int().min(0).parse(upload.version)
                 : undefined;
-            const image = await timed("decode", () =>
-              service.decodeUpload(id, upload.bytes),
+            const [image, stocked] = await timed("decode", () =>
+              Promise.all([
+                service.decodeUpload(id, upload.bytes),
+                op === "calibration" && upload.stocked
+                  ? service.decodeStocked(upload.stocked.bytes)
+                  : undefined,
+              ]),
             );
-            const stocked =
-              op === "calibration" && upload.stocked
-                ? await service.decodeStocked(upload.stocked.bytes)
-                : undefined;
             if (op === "calibration")
               await service.calibrate(
                 id,
@@ -271,7 +306,6 @@ async function dispatch(request: Request) {
                       : z.number().int().min(0).parse(upload.expectedVersion),
                 }),
               );
-              succeeded = true;
               return json(
                 {
                   ...(await service.analysisOut(
@@ -286,11 +320,9 @@ async function dispatch(request: Request) {
                 201,
               );
             }
-            succeeded = true;
             return json(await service.shelfOut(await service.getShelf(id)));
           } finally {
-            await upload.stocked?.remove().catch(() => {});
-            if (!succeeded) await upload.remove();
+            releaseTempUploads(upload);
           }
         }
       }

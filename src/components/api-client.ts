@@ -160,7 +160,10 @@ export async function uploadImage<T>(
   fields: Record<string, unknown> = {},
   stocked?: Blob,
 ): Promise<T> {
-  const ticket = await requestTicket(shelfId, operation);
+  const [ticket, stockedTicket] = await Promise.all([
+    requestTicket(shelfId, operation),
+    stocked ? requestTicket(shelfId, "stocked") : undefined,
+  ]);
   if (ticket.storage === "local") {
     const form = new FormData();
     form.append("file", file, "photo.png");
@@ -175,11 +178,10 @@ export async function uploadImage<T>(
       body: form,
     });
   }
-  await putBlob(ticket, file);
-  const stockedTicket = stocked
-    ? await requestTicket(shelfId, "stocked")
-    : undefined;
-  if (stocked && stockedTicket) await putBlob(stockedTicket, stocked);
+  await Promise.all([
+    putBlob(ticket, file),
+    stocked && stockedTicket ? putBlob(stockedTicket, stocked) : undefined,
+  ]);
   return api<T>(
     `/shelves/${shelfId}/${operation}`,
     json({

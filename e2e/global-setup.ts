@@ -95,7 +95,7 @@ export default async function globalSetup() {
   const testUrl = process.env.TEST_DATABASE_URL;
   if (!testUrl) {
     throw new Error(
-      "TEST_DATABASE_URL is required (see docs/e2e-test-log.md, 'Throwaway database').",
+      "TEST_DATABASE_URL is required (a disposable Postgres, never the app database).",
     );
   }
   const target = new URL(testUrl);

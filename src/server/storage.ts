@@ -7,6 +7,18 @@ import { randomUUID } from "node:crypto";
 import { put, del, get } from "@vercel/blob";
 import { png, type RGB } from "./shelf-analysis";
 import { HttpError } from "./validation";
+import { timed } from "./timing";
+/**
+ * The key is a fresh random UUID per call, so only a retry of this same put can
+ * hit it; allowing overwrite makes the SDK's internal retry idempotent instead
+ * of failing with "blob already exists". Historical assets are never reused.
+ */
+export const ASSET_PUT_OPTIONS = {
+  access: "private",
+  addRandomSuffix: false,
+  allowOverwrite: true,
+  contentType: "image/png",
+} as const;
 export const mediaRoot = () => resolve(process.env.MEDIA_DIR || "media");
 function localKey(key: string) {
   if (!/^[0-9a-f-]{36}\.png$/.test(key))
@@ -15,9 +27,11 @@ function localKey(key: string) {
 }
 export async function readImage(key: string) {
   if (key.startsWith("blob:")) {
-    const result = await get(key.slice(5), { access: "private" });
-    if (!result) throw new HttpError(404, "Image not found.");
-    return Buffer.from(await new Response(result.stream).arrayBuffer());
+    return timed("blob-get", async () => {
+      const result = await get(key.slice(5), { access: "private" });
+      if (!result) throw new HttpError(404, "Image not found.");
+      return Buffer.from(await new Response(result.stream).arrayBuffer());
+    });
   }
   return readFile(localKey(key));
 }
@@ -36,15 +50,13 @@ export async function writeAsset(
   created: string[],
   id: string = randomUUID(),
 ) {
-  const bytes = await png(image),
+  const bytes = await timed("png-encode", () => png(image)),
     key = `${randomUUID()}.png`;
   let storageKey = key;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const result = await put(`media/${key}`, bytes, {
-      access: "private",
-      addRandomSuffix: false,
-      contentType: "image/png",
-    });
+    const result = await timed("blob-put", () =>
+      put(`media/${key}`, bytes, { ...ASSET_PUT_OPTIONS }),
+    );
     storageKey = `blob:${result.pathname}`;
   } else {
     if (process.env.VERCEL)
@@ -67,7 +79,7 @@ export async function writeAsset(
   };
 }
 export async function cleanup(keys: string[]) {
-  await Promise.all(keys.map(removeImage));
+  await timed("blob-cleanup", () => Promise.all(keys.map(removeImage)));
 }
 
 export async function imageStream(

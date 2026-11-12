@@ -664,27 +664,27 @@ export async function analyzeWithStatus(
         result.duration_ms += performance.now() - start;
       }
     }
-    const input = await inputWrite,
-      overlay =
-        !options.stockOnly && options.saveEvidence !== false && result.overlay
-          ? await writeAsset(
-              id,
-              result.overlay,
-              "Overlay",
-              options.demo ?? false,
-              keys,
-            )
-          : null,
-      mask =
-        !options.stockOnly && options.saveEvidence !== false && result.mask
-          ? await writeAsset(
-              id,
-              result.mask,
-              "Mask",
-              options.demo ?? false,
-              keys,
-            )
-          : null;
+    const evidence = !options.stockOnly && options.saveEvidence !== false;
+    // Overlay and mask are independent of each other: encode/upload together.
+    // allSettled so every in-flight write registers its key before cleanup.
+    const settled = await Promise.allSettled([
+      inputWrite,
+      evidence && result.overlay
+        ? writeAsset(id, result.overlay, "Overlay", options.demo ?? false, keys)
+        : null,
+      evidence && result.mask
+        ? writeAsset(id, result.mask, "Mask", options.demo ?? false, keys)
+        : null,
+    ]);
+    const failed = settled.find((r) => r.status === "rejected");
+    if (failed) throw (failed as PromiseRejectedResult).reason;
+    const [input, overlay, mask] = settled.map(
+      (r) => (r as PromiseFulfilledResult<any>).value,
+    ) as [
+      Awaited<ReturnType<typeof writeAsset>>,
+      Awaited<ReturnType<typeof writeAsset>> | null,
+      Awaited<ReturnType<typeof writeAsset>> | null,
+    ];
     await options.beforePublish?.();
     const published = await timed("publish-tx", () =>
       transaction(async (c) => {

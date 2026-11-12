@@ -22,10 +22,12 @@ coverage/
 *.log
 
 # Local task inputs and workflow notes
-/AGENTS.md
-/build-prompt.md
-/requirements.pdf
-/docs/implementation-plan.md
+AGENTS.md
+CLAUDE.md
+build-prompt.md
+requirements.pdf
+docs/
+local-samples/
 
 # Operating system files
 .DS_Store
@@ -35,3 +37,4 @@ Thumbs.db
 .ruff_cache/
 __pycache__/
 .venv/
+tests/fixtures/shelves/README.md
