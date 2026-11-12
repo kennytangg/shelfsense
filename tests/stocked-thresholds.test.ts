@@ -11,9 +11,9 @@ import { settingsSchema, roiSchema } from "../src/server/validation";
 
 test("scaleThresholds scales the defaults to the full coverage", () => {
   const s = scaleThresholds(0.33);
-  assert.equal(EMPTY_LEVEL, 0.15);
+  assert.equal(EMPTY_LEVEL, 0.11);
   assert.equal(FULL_LEVEL, 0.75);
-  assert.ok(Math.abs(s.empty_threshold - 0.0495) < 1e-12);
+  assert.ok(Math.abs(s.empty_threshold - 0.0363) < 1e-12);
   assert.ok(Math.abs(s.full_threshold - 0.2475) < 1e-12);
   assert.equal(s.stocked_coverage, 0.33);
   assert.doesNotThrow(() =>

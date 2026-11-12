@@ -29,7 +29,10 @@ test.describe("Stock check", () => {
     await expect(
       page.getByRole("button", { name: "Report restocked", exact: true }),
     ).toBeVisible();
-    // One action only: the header has no second "Restock shelf" button.
+    // "Check stock" is always available; the header has no "Restock shelf" button.
+    await expect(
+      page.getByRole("link", { name: "Check stock", exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Restock shelf" })).toHaveCount(
       0,
     );

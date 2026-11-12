@@ -17,6 +17,9 @@ test.describe("Restock workflow", () => {
 
     await page.goto(`/shelves/${shelf.id}`);
     await expect(resultBadge(page)).toHaveText("Low");
+    await expect(
+      page.getByRole("link", { name: "Check stock", exact: true }),
+    ).toHaveAttribute("href", `/shelves/${shelf.id}/check`);
     await page
       .getByRole("button", { name: "Report restocked", exact: true })
       .click();

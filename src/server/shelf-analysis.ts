@@ -10,7 +10,7 @@ import {
 } from "./validation";
 import { estimateGain, removeGain } from "./exposure";
 import { normalizeIllumination } from "./illumination";
-export const ALGORITHM_VERSION = "empty-reference-lab/2.0";
+export const ALGORITHM_VERSION = "empty-reference-lab/2.1";
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const MAX_PIXELS = 20_000_000;
 export type RGB = { data: Buffer; width: number; height: number };

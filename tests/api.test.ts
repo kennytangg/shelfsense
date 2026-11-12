@@ -193,6 +193,45 @@ integration(
   },
 );
 integration(
+  "repeated Low checks keep one task, and a Low after Report restocked opens a new one and clears the reported flag",
+  async () => {
+    const id = await create();
+    await calibrate(id);
+    await upload(id, "low");
+    const first = (await detail(id)).active_alert;
+    await upload(id, "low");
+    const again = (await detail(id)).active_alert;
+    assert.equal(again.id, first.id);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT id FROM alerts WHERE shelf_id=$1 AND state IN ('Open','Acknowledged')",
+          [id],
+        )
+      ).length,
+      1,
+    );
+    await request("/alerts/" + first.id, "PATCH", {
+      action: "report_restocked",
+    });
+    assert.equal((await detail(id)).awaiting_verification, true);
+    await upload(id, "low");
+    const s = await detail(id);
+    assert.equal(s.status, "Low");
+    assert.equal(s.awaiting_verification, false);
+    assert.notEqual(s.active_alert.id, first.id);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT id FROM alerts WHERE shelf_id=$1 AND state IN ('Open','Acknowledged')",
+          [id],
+        )
+      ).length,
+      1,
+    );
+  },
+);
+integration(
   "repeating Report restocked (a retry or double submit) succeeds with the closed task",
   async () => {
     const id = await create();

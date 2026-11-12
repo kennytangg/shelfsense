@@ -1,5 +1,5 @@
 "use client";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { Camera, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { DeleteShelf } from "./delete-shelf";
 import { Button } from "./ui/button";
@@ -54,7 +54,7 @@ export function ShelfDetail({
     onSettled: () => client.invalidateQueries(),
   });
   const shelf = query.data;
-  // A shelf that needs restocking has one action: "Report restocked" below.
+  // A shelf that needs restocking keeps "Report restocked" below; "Check stock" stays in the header.
   const needsRestockReport =
     !!shelf?.active_alert && !shelf.awaiting_verification;
   const failed = shelf ? !!shelfPresentation(shelf).exception : false;
@@ -71,7 +71,16 @@ export function ShelfDetail({
       {shelf && (
         <>
           <ShelfHeader title={shelf.name} shelf={shelf}>
-            {!needsRestockReport && <ShelfAction shelf={shelf} />}
+            {needsRestockReport ? (
+              <Button asChild>
+                <Link href={`/shelves/${id}/check`}>
+                  <Camera className="size-4 shrink-0" aria-hidden="true" />
+                  Check stock
+                </Link>
+              </Button>
+            ) : (
+              <ShelfAction shelf={shelf} />
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

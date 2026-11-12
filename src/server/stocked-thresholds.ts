@@ -11,8 +11,11 @@ export const STOCKED_TOO_SIMILAR_MESSAGE =
  * Measured on the real bookshelf frames with the whole image and with an interior area:
  * half stocked 0.52 / 0.58, empty 0.00, full again 1.07 / 1.14, mostly full 0.96 / 1.10.
  * Full at 0.75 sits near the middle of the gap, 0.2 or more from both sides.
+ * Across six real sets the emptiest frames read at most 0.05 (a sneaker left on the floor)
+ * and the lowest genuine Low reads 0.18 (one row of a shoe-box stack), so Empty at 0.11
+ * leaves about 0.06 on both sides.
  */
-export const EMPTY_LEVEL = 0.15;
+export const EMPTY_LEVEL = 0.11;
 export const FULL_LEVEL = 0.75;
 
 /** Scales the Empty and Full cut-offs to this shelf's full coverage. */
